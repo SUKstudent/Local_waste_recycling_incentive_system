@@ -1,0 +1,11 @@
+collector_id,name,assigned_area,total_points
+1,Collector1,Railway Station,0
+2,Collector2,Railway Station,0
+3,Collector3,Hospital,0
+4,Collector4,Hotel,0
+5,Collector5,Residential Apartment Complex,0
+6,Collector6,Hospital,0
+7,Collector7,Hospital,0
+8,Collector8,Hospital,0
+9,Collector9,Bus Terminal,0
+10,Collector10,Industrial Area,0
