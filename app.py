@@ -6,19 +6,19 @@ import os
 st.set_page_config(page_title="Local Waste Recycling", layout="wide")
 
 # --- Load CSVs ---
-users_file = 'LocalWaste Project/users_large.csv'
-collectors_file = 'LocalWaste Project/collectors_large.csv'
-submissions_file = 'LocalWaste Project/submissions_large.csv'
+users_file = os.path.join('LocalWaste Project','users_large.csv')
+collectors_file = os.path.join('LocalWaste Project','collectors_large.csv')
+submissions_file = os.path.join('LocalWaste Project','submissions_large.csv')
 
 users_df = pd.read_csv(users_file)
 collectors_df = pd.read_csv(collectors_file)
 submissions_df = pd.read_csv(submissions_file)
 
 # --- Load model & encoders ---
-clf_path = 'LocalWaste Project/waste_model.pkl'
-le_user_path = 'LocalWaste Project/encoder_user.pkl'
-le_collector_path = 'LocalWaste Project/encoder_collector.pkl'
-le_waste_path = 'LocalWaste Project/encoder_waste.pkl'
+clf_path = os.path.join('LocalWaste Project','waste_model.pkl')
+le_user_path = os.path.join('LocalWaste Project','encoder_user.pkl')
+le_collector_path = os.path.join('LocalWaste Project','encoder_collector.pkl')
+le_waste_path = os.path.join('LocalWaste Project','encoder_waste.pkl')
 
 if all(os.path.exists(p) for p in [clf_path, le_user_path, le_collector_path, le_waste_path]):
     clf = joblib.load(clf_path)
