@@ -4,170 +4,256 @@ import os
 import joblib
 import random
 import string
+import plotly.express as px
+from datetime import datetime
 
-# --- Page configuration ---
-st.set_page_config(page_title="Local Waste Recycling", layout="wide", page_icon="♻️")
+# -----------------------------
+# Page config and light theme
+# -----------------------------
+st.set_page_config(page_title="Local Waste Recycling", layout="wide")
+st.markdown(
+    """
+    <style>
+    .css-18ni7ap.e8zbici2 {background-color: #e6f7e6;}  /* Light green background */
+    .stButton button {background-color: #4CAF50; color: white;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# --- Helper functions ---
+# -----------------------------
+# Helper functions
+# -----------------------------
 def generate_user_id(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def send_otp_simulation():
     otp = random.randint(1000, 9999)
     st.session_state['otp'] = otp
-    st.session_state['otp_verified'] = True  # Auto verify for demo
-    st.success(f"OTP auto-filled (Simulated): {otp}")
+    st.info(f"OTP sent to your mobile (Simulated): {otp}")
     return otp
 
-# --- File paths ---
-data_dir = '.'
+# -----------------------------
+# File paths
+# -----------------------------
+data_dir = '.'  # Current folder
 users_file = os.path.join(data_dir, 'users_large.csv')
 collectors_file = os.path.join(data_dir, 'collectors_large.csv')
 submissions_file = os.path.join(data_dir, 'submissions_large.csv')
 logo_path = os.path.join(data_dir, "GreenBin.jpg")
 
-# --- Load CSVs ---
+# -----------------------------
+# Load CSVs safely
+# -----------------------------
 users_df = pd.read_csv(users_file) if os.path.exists(users_file) else pd.DataFrame(
     columns=['user_id','name','mobile','area','total_points','improper_count'])
 collectors_df = pd.read_csv(collectors_file) if os.path.exists(collectors_file) else pd.DataFrame(
     columns=['collector_id','name','assigned_area','total_points','ratings'])
 submissions_df = pd.read_csv(submissions_file) if os.path.exists(submissions_file) else pd.DataFrame(
-    columns=['submission_id','user_id','collector_id','waste_type','quantity','points','status','category','degradable','bio_type'])
+    columns=['submission_id','user_id','collector_id','waste_type','quantity','points','status','category','timestamp'])
 
-# --- Sidebar Logo and navigation ---
-st.sidebar.markdown("<h2 style='color:green'>♻️ GreenBin</h2>", unsafe_allow_html=True)
+# -----------------------------
+# Add timestamp column if missing
+# -----------------------------
+if 'timestamp' not in submissions_df.columns:
+    submissions_df['timestamp'] = pd.to_datetime('now')
+
+submissions_df['timestamp'] = pd.to_datetime(submissions_df['timestamp'])
+
+# -----------------------------
+# Load ML models if exist
+# -----------------------------
+clf_path = os.path.join(data_dir,'waste_model.pkl')
+le_user_path = os.path.join(data_dir,'encoder_user.pkl')
+le_collector_path = os.path.join(data_dir,'encoder_collector.pkl')
+le_waste_path = os.path.join(data_dir,'encoder_waste.pkl')
+
+if all(os.path.exists(p) for p in [clf_path, le_user_path, le_collector_path, le_waste_path]):
+    clf = joblib.load(clf_path)
+    le_user = joblib.load(le_user_path)
+    le_collector = joblib.load(le_collector_path)
+    le_waste = joblib.load(le_waste_path)
+else:
+    clf = None
+
+# -----------------------------
+# Sidebar Logo and Navigation
+# -----------------------------
 if os.path.exists(logo_path):
     st.sidebar.image(logo_path, width=180)
 else:
-    st.sidebar.warning("Logo GreenBin.jpg not found!")
+    st.sidebar.warning(f"Logo {logo_path} not found!")
 
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Select Page", ["Login / Waste Submission", "User Leaderboard", "Collector Leaderboard"])
+page = st.sidebar.radio("Go to:", ["Login / Waste Submission", "User Leaderboard", "Collector Leaderboard", "User Dashboard", "Collector Dashboard"])
 
-# --- OTP session ---
+# -----------------------------
+# Session state for OTP
+# -----------------------------
 if 'otp_sent' not in st.session_state:
     st.session_state['otp_sent'] = False
 if 'otp_verified' not in st.session_state:
     st.session_state['otp_verified'] = False
 
-# --- Page 1: Login / Waste Submission ---
+# -----------------------------
+# Page: Login / Waste Submission
+# -----------------------------
 if page == "Login / Waste Submission":
     st.title("⚡ Local Waste & Recycling Incentive System")
-    
-    with st.form(key="login_form"):
-        st.subheader("User Login / Registration")
-        mobile = st.text_input("Enter your mobile number")
-        name = st.text_input("Enter your name")
-        area_options = ["--Select your area--",'Residential Apartment Complex','Hospital','Shopping Mall','Office Complex',
-                        'Market','School/College','Railway Station','Bus Terminal','Industrial Area','Hotel']
-        area = st.selectbox("Select your area", area_options)
-        send_otp = st.form_submit_button("Send/Resend OTP")
-        
-        if send_otp:
+
+    st.subheader("User Login / Registration")
+    mobile = st.text_input("Mobile Number")
+    name = st.text_input("Name")
+    area_options = ['--Select your area--','Residential Apartment Complex','Hospital','Shopping Mall','Office Complex',
+                    'Market','School/College','Railway Station','Bus Terminal','Industrial Area','Hotel']
+    area = st.selectbox("Select your area", area_options)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Send/Resend OTP"):
             if mobile:
                 send_otp_simulation()
+                st.session_state['otp_sent'] = True
             else:
                 st.error("Enter mobile number!")
 
+    with col2:
+        otp_input = st.text_input("Enter OTP")
+        if st.button("Verify OTP"):
+            if st.session_state.get('otp_sent', False) and otp_input:
+                if str(st.session_state['otp']) == otp_input:
+                    st.success("OTP Verified ✅")
+                    st.session_state['otp_verified'] = True
+                else:
+                    st.error("Incorrect OTP")
+            else:
+                st.warning("Send OTP first!")
+
     if st.session_state.get('otp_verified', False):
-        st.success("OTP Verified ✅")
-        with st.form(key="waste_form"):
-            st.subheader("Submit Waste")
-            waste_types = ['Plastic','Paper','Organic','Other']
-            waste_type = st.selectbox("Waste Type", waste_types)
-            quantity = st.number_input("Quantity (kg)", min_value=0.0, step=0.1)
-            degradable = st.radio("Is the waste degradable?", ("Yes", "No"))
-            bio_type = None
-            if degradable == "Yes":
-                bio_type = st.selectbox("Type of degradable waste", ["Biodegradable", "Non-biodegradable"])
-            proper = st.radio("Is waste properly segregated?", ("Yes", "No"))
-            submit_waste = st.form_submit_button("Submit Waste")
+        st.subheader("Submit Waste")
+        waste_types = ['Plastic','Paper','Organic','Other']
+        waste_type = st.selectbox("Waste Type", waste_types)
+        quantity = st.number_input("Quantity (kg)", min_value=0.0, step=0.1)
+        submit_btn = st.button("Submit Waste")
+        points_dict = {'Plastic':10,'Paper':5,'Organic':2,'Other':1}
 
-            if submit_waste and quantity > 0 and area != "--Select your area--":
-                points_dict = {'Plastic':10,'Paper':5,'Organic':2,'Other':1}
-                # Add or get user
-                existing_user = users_df[users_df['mobile'] == mobile]
-                if existing_user.empty:
-                    new_user = {
-                        'user_id': generate_user_id(),
-                        'name': name,
-                        'mobile': mobile,
-                        'area': area,
-                        'total_points': 0,
-                        'improper_count': 0
-                    }
-                    users_df = pd.concat([users_df, pd.DataFrame([new_user])], ignore_index=True)
-                    user_row = new_user
-                else:
-                    user_row = existing_user.iloc[0]
-                user_index = users_df[users_df['mobile'] == mobile].index[0]
+        if submit_btn and quantity>0 and area != '--Select your area--':
+            existing_user = users_df[users_df['mobile']==mobile]
+            if existing_user.empty:
+                new_user = {'user_id': generate_user_id(), 'name': name, 'mobile': mobile,
+                            'area': area, 'total_points':0, 'improper_count':0}
+                users_df = pd.concat([users_df, pd.DataFrame([new_user])], ignore_index=True)
+                user_row = new_user
+            else:
+                user_row = existing_user.iloc[0]
+            user_index = users_df[users_df['mobile']==mobile].index[0]
 
-                category = "Dry" if waste_type in ['Plastic', 'Paper', 'Other'] else "Wet"
-                if proper == "Yes":
-                    points_earned = quantity * points_dict[waste_type]
-                    users_df.at[user_index, 'total_points'] += points_earned
-                    status = "Proper"
-                    st.success(f"Points Earned: {points_earned} | Category: {category}")
-                else:
-                    users_df.at[user_index, 'improper_count'] += 1
-                    improper_count = users_df.at[user_index, 'improper_count']
-                    points_earned = 0
-                    status = "Improper"
-                    st.warning(f"Submission Improper | Category: {category}")
-                    if improper_count > 2:
-                        st.error("Third improper submission: 1 point deducted!")
-                        users_df.at[user_index, 'total_points'] -= 1
+            proper = st.radio("Is waste properly segregated?", ["Yes","No"])
+            category = "Dry" if waste_type in ['Plastic','Paper','Other'] else "Wet"
 
-                # Assign collector
-                area_collectors = collectors_df[collectors_df['assigned_area'] == area]
-                collector_id = None
-                if not area_collectors.empty:
-                    collector_row = area_collectors.iloc[0]
-                    collector_index = area_collectors.index[0]
-                    collectors_df.at[collector_index, 'total_points'] += points_earned
-                    collector_id = collector_row['collector_id']
-                    rating = st.slider(f"Rate collector {collector_row['name']}", 1, 5)
-                    prev_ratings = collector_row.get('ratings', [])
-                    if not isinstance(prev_ratings, list):
-                        prev_ratings = []
-                    prev_ratings.append(rating)
-                    collectors_df.at[collector_index, 'ratings'] = prev_ratings
+            if proper == "Yes":
+                points_earned = quantity * points_dict[waste_type]
+                users_df.at[user_index,'total_points'] += points_earned
+                status = "Proper"
+                st.success(f"Points Earned: {points_earned} | Category: {category}")
+            else:
+                users_df.at[user_index,'improper_count'] += 1
+                improper_count = users_df.at[user_index,'improper_count']
+                points_earned = 0
+                status = "Improper"
+                st.warning(f"Submission Improper | Category: {category}")
+                if improper_count > 2:
+                    st.error("Third improper submission: 1 point deducted!")
+                    users_df.at[user_index,'total_points'] -= 1
 
-                # Record submission
-                new_submission = {
-                    'submission_id': len(submissions_df) + 1,
-                    'user_id': user_row['user_id'],
-                    'collector_id': collector_id,
-                    'waste_type': waste_type,
-                    'quantity': quantity,
-                    'points': points_earned,
-                    'status': status,
-                    'category': category,
-                    'degradable': degradable,
-                    'bio_type': bio_type
-                }
-                submissions_df = pd.concat([submissions_df, pd.DataFrame([new_submission])], ignore_index=True)
+            area_collectors = collectors_df[collectors_df['assigned_area']==area]
+            collector_id = None
+            if not area_collectors.empty:
+                collector_row = area_collectors.iloc[0]
+                collector_index = area_collectors.index[0]
+                collectors_df.at[collector_index,'total_points'] += points_earned
+                collector_id = collector_row['collector_id']
 
-                # Save CSVs
-                users_df.to_csv(users_file, index=False)
-                collectors_df.to_csv(collectors_file, index=False)
-                submissions_df.to_csv(submissions_file, index=False)
+                rating = st.slider(f"Rate collector {collector_row['name']}", 1, 5)
+                prev_ratings = collector_row.get('ratings', [])
+                if not isinstance(prev_ratings,list):
+                    prev_ratings = []
+                prev_ratings.append(rating)
+                collectors_df.at[collector_index,'ratings'] = prev_ratings
 
-# --- Page 2: User Leaderboard ---
+            new_submission = {'submission_id': len(submissions_df)+1, 'user_id': user_row['user_id'],
+                              'collector_id': collector_id, 'waste_type': waste_type, 'quantity': quantity,
+                              'points': points_earned, 'status': status, 'category': category,
+                              'timestamp': datetime.now()}
+            submissions_df = pd.concat([submissions_df, pd.DataFrame([new_submission])], ignore_index=True)
+
+            users_df.to_csv(users_file, index=False)
+            collectors_df.to_csv(collectors_file, index=False)
+            submissions_df.to_csv(submissions_file, index=False)
+
+            if clf is not None:
+                try:
+                    user_enc = le_user.transform([user_row['user_id']])[0]
+                    collector_enc = le_collector.transform([collector_id if collector_id else 0])[0]
+                    waste_enc = le_waste.transform([waste_type])[0]
+                    ml_pred = clf.predict([[user_enc, collector_enc, waste_enc, quantity]])[0]
+                    st.info(f"AI Prediction: {'Proper ✅' if ml_pred==1 else 'Improper ❌'}")
+                except:
+                    st.warning("ML Prediction unavailable for new user/collector.")
+
+# -----------------------------
+# Page: User Leaderboard
+# -----------------------------
 elif page == "User Leaderboard":
     st.subheader("🏆 User Leaderboard")
-    if not users_df.empty and {'area', 'name', 'total_points'}.issubset(users_df.columns):
-        user_board = users_df.groupby('area')[['name','total_points']].apply(lambda x: x.sort_values('total_points', ascending=False)).reset_index(drop=True)
+    if not users_df.empty:
+        user_board = users_df.groupby('area')[['name','total_points']].apply(
+            lambda x: x.sort_values('total_points', ascending=False)
+        ).reset_index(drop=True)
         st.table(user_board)
     else:
-        st.warning("User Leaderboard unavailable: no data or missing columns")
+        st.warning("No user data available.")
 
-# --- Page 3: Collector Leaderboard ---
+# -----------------------------
+# Page: Collector Leaderboard
+# -----------------------------
 elif page == "Collector Leaderboard":
     st.subheader("🏅 Collector Leaderboard")
-    if not collectors_df.empty and {'name','assigned_area','total_points','ratings'}.issubset(collectors_df.columns):
-        collectors_df['avg_rating'] = collectors_df['ratings'].apply(lambda x: sum(x)/len(x) if isinstance(x,list) and len(x)>0 else 0)
-        collector_board = collectors_df.sort_values('total_points', ascending=False)[['name','assigned_area','total_points','avg_rating']]
+    if not collectors_df.empty:
+        collectors_df['avg_rating'] = collectors_df['ratings'].apply(
+            lambda x: sum(x)/len(x) if isinstance(x,list) and len(x)>0 else 0
+        )
+        collector_board = collectors_df.sort_values('total_points', ascending=False)[
+            ['name','assigned_area','total_points','avg_rating']
+        ]
         st.table(collector_board)
     else:
-        st.warning("Collector Leaderboard unavailable: no data or missing columns")
+        st.warning("No collector data available.")
+
+# -----------------------------
+# Page: User Dashboard
+# -----------------------------
+elif page == "User Dashboard":
+    st.subheader("📊 User Dashboard")
+    if not submissions_df.empty:
+        submissions_df['week'] = submissions_df['timestamp'].dt.to_period('W').apply(lambda r: r.start_time)
+        weekly_user = submissions_df.groupby(['week','status']).size().reset_index(name='count')
+        fig_user = px.bar(weekly_user, x='week', y='count', color='status', title="Weekly Proper/Improper Submissions")
+        st.plotly_chart(fig_user, use_container_width=True)
+    else:
+        st.warning("No submissions available.")
+
+# -----------------------------
+# Page: Collector Dashboard
+# -----------------------------
+elif page == "Collector Dashboard":
+    st.subheader("📊 Collector Dashboard")
+    if not submissions_df.empty:
+        submissions_df['collector_name'] = submissions_df['collector_id'].map(
+            dict(zip(collectors_df['collector_id'], collectors_df['name']))
+        )
+        weekly_collector = submissions_df.groupby(['week','collector_name']).size().reset_index(name='count')
+        fig_collector = px.bar(weekly_collector, x='week', y='count', color='collector_name', title="Weekly Collections per Collector")
+        st.plotly_chart(fig_collector, use_container_width=True)
+    else:
+        st.warning("No submissions available.")
