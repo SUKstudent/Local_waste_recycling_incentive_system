@@ -3,18 +3,18 @@ import joblib
 from sklearn.metrics import accuracy_score, classification_report
 import os
 
-# --- Load test CSV ---
-test_file = 'LocalWaste Project/submissions_test.csv'
+# --- Correct path to test CSV ---
+test_file = os.path.join('LocalWaste Project', 'submissions_test.csv')
 if not os.path.exists(test_file):
     raise FileNotFoundError(f"{test_file} not found.")
 
 df = pd.read_csv(test_file)
 
 # --- Load model & encoders ---
-clf = joblib.load('LocalWaste Project/waste_model.pkl')
-le_user = joblib.load('LocalWaste Project/encoder_user.pkl')
-le_collector = joblib.load('LocalWaste Project/encoder_collector.pkl')
-le_waste = joblib.load('LocalWaste Project/encoder_waste.pkl')
+clf = joblib.load(os.path.join('LocalWaste Project','waste_model.pkl'))
+le_user = joblib.load(os.path.join('LocalWaste Project','encoder_user.pkl'))
+le_collector = joblib.load(os.path.join('LocalWaste Project','encoder_collector.pkl'))
+le_waste = joblib.load(os.path.join('LocalWaste Project','encoder_waste.pkl'))
 
 # --- Filter test data to known encoder classes ---
 df = df[df['user_id'].isin(le_user.classes_)]
