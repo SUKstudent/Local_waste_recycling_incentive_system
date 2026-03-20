@@ -4,8 +4,8 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 import os
 
-# --- Correct path to train CSV ---
-train_file = os.path.join('LocalWaste Project', 'submissions_train.csv')
+# --- Relative path to CSV ---
+train_file = 'submissions_large.csv'  # CSV should be in the same folder as this script
 if not os.path.exists(train_file):
     raise FileNotFoundError(f"{train_file} not found.")
 
@@ -30,10 +30,10 @@ clf = RandomForestClassifier(n_estimators=100, random_state=42)
 clf.fit(X, y)
 
 # --- Save model & encoders ---
-joblib.dump(clf, os.path.join('LocalWaste Project','waste_model.pkl'))
-joblib.dump(le_user, os.path.join('LocalWaste Project','encoder_user.pkl'))
-joblib.dump(le_collector, os.path.join('LocalWaste Project','encoder_collector.pkl'))
-joblib.dump(le_waste, os.path.join('LocalWaste Project','encoder_waste.pkl'))
+joblib.dump(clf, 'waste_model.pkl')
+joblib.dump(le_user, 'encoder_user.pkl')
+joblib.dump(le_collector, 'encoder_collector.pkl')
+joblib.dump(le_waste, 'encoder_waste.pkl')
 
 print("✅ Model trained and saved!")
 print(f"Training samples: {X.shape[0]}")
