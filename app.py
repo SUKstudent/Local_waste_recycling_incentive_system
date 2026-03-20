@@ -56,7 +56,6 @@ if 'timestamp' not in submissions_df.columns:
     submissions_df['timestamp'] = pd.to_datetime('now')
 submissions_df['timestamp'] = pd.to_datetime(submissions_df['timestamp'])
 submissions_df['date'] = submissions_df['timestamp'].dt.date
-submissions_df['week'] = submissions_df['timestamp'].dt.to_period('W').apply(lambda r: r.start_time)
 
 # -----------------------------
 # Load ML models if exist
@@ -79,13 +78,12 @@ else:
 # -----------------------------
 if os.path.exists(logo_path):
     st.sidebar.image(logo_path, width=180)
-else:
-    st.sidebar.warning(f"Logo {logo_path} not found!")
 
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to:", [
-    "Login / Waste Submission", "User Leaderboard", 
-    "Collector Leaderboard", "User Dashboard", "Collector Dashboard"
+    "Login / Waste Submission",
+    "User Leaderboard",
+    "User Dashboard"
 ])
 
 # -----------------------------
@@ -99,7 +97,7 @@ for key in ['otp_sent','otp_verified','otp_input','logged_in','current_user']:
 # Page: Login / Waste Submission
 # -----------------------------
 if page == "Login / Waste Submission":
-    st.title("♻️ Local Waste & Recycling Incentive System")
+    st.title("⚡ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
     mobile = st.text_input("Mobile Number", key="mobile_input")
@@ -142,11 +140,12 @@ if page == "Login / Waste Submission":
         # -----------------------------
         waste_types = ['Plastic','Paper','Organic','Other']
         waste_type = st.selectbox("Waste Type", waste_types)
-        quantity = st.number_input("Quantity (kg)", min_value=0.0, step=0.1)
+        quantity = st.number_input("Quantity (kg)", min_value=0.0, step=0.01, format="%.2f")
         submit_btn = st.button("Submit Waste")
         points_dict = {'Plastic':10,'Paper':5,'Organic':2,'Other':1}
 
         if submit_btn and quantity>0 and area != '--Select your area--':
+            # Get or create user
             existing_user = users_df[users_df['mobile']==mobile]
             if existing_user.empty:
                 new_user = {'user_id': generate_user_id(), 'name': name, 'mobile': mobile,
@@ -175,21 +174,17 @@ if page == "Login / Waste Submission":
                     st.error("Third improper submission: 1 point deducted!")
                     users_df.at[user_index,'total_points'] -= 1
 
+            # Assign collector from area
             area_collectors = collectors_df[collectors_df['assigned_area']==area]
+            collector_name = None
             collector_id = None
             if not area_collectors.empty:
                 collector_row = area_collectors.iloc[0]
-                collector_index = area_collectors.index[0]
-                collectors_df.at[collector_index,'total_points'] += points_earned
                 collector_id = collector_row['collector_id']
+                collector_name = collector_row['name']
+                collectors_df.at[area_collectors.index[0],'total_points'] += points_earned
 
-                rating = st.slider(f"Rate collector {collector_row['name']}", 1, 5)
-                prev_ratings = collector_row.get('ratings', [])
-                if not isinstance(prev_ratings,list):
-                    prev_ratings = []
-                prev_ratings.append(rating)
-                collectors_df.at[collector_index,'ratings'] = prev_ratings
-
+            # Save submission
             new_submission = {'submission_id': len(submissions_df)+1, 'user_id': user_row['user_id'],
                               'collector_id': collector_id, 'waste_type': waste_type, 'quantity': quantity,
                               'points': points_earned, 'status': status, 'category': category,
@@ -200,6 +195,8 @@ if page == "Login / Waste Submission":
             users_df.to_csv(users_file, index=False)
             collectors_df.to_csv(collectors_file, index=False)
             submissions_df.to_csv(submissions_file, index=False)
+
+            st.info(f"Collector Assigned: {collector_name if collector_name else 'No collector assigned'}")
 
             # ML prediction
             if clf is not None:
@@ -224,44 +221,27 @@ elif page == "User Leaderboard":
         st.warning("No user data available.")
 
 # -----------------------------
-# Collector Leaderboard
-# -----------------------------
-elif page == "Collector Leaderboard":
-    st.subheader("🏅 Collector Leaderboard")
-    if not collectors_df.empty:
-        collectors_df['avg_rating'] = collectors_df['ratings'].apply(
-            lambda x: sum(x)/len(x) if isinstance(x,list) and len(x)>0 else 0
-        )
-        collector_board = collectors_df.sort_values('total_points', ascending=False)[
-            ['name','assigned_area','total_points','avg_rating']
-        ]
-        st.table(collector_board)
-    else:
-        st.warning("No collector data available.")
-
-# -----------------------------
-# User Daily Dashboard
+# User Dashboard by Area
 # -----------------------------
 elif page == "User Dashboard":
-    st.subheader("📊 User Daily Dashboard")
+    st.subheader("📊 User Dashboard by Area")
     if not submissions_df.empty:
-        daily_user = submissions_df.groupby(['date','status']).size().reset_index(name='count')
-        fig_user = px.bar(daily_user, x='date', y='count', color='status', title="Daily Proper/Improper Submissions")
-        st.plotly_chart(fig_user, use_container_width=True)
-    else:
-        st.warning("No submissions available.")
-
-# -----------------------------
-# Collector Daily Dashboard
-# -----------------------------
-elif page == "Collector Dashboard":
-    st.subheader("📊 Collector Daily Dashboard")
-    if not submissions_df.empty:
-        submissions_df['collector_name'] = submissions_df['collector_id'].map(
-            dict(zip(collectors_df['collector_id'], collectors_df['name']))
+        # Merge submissions with users to get area
+        submissions_with_area = submissions_df.merge(
+            users_df[['user_id','area']], on='user_id', how='left'
         )
-        daily_collector = submissions_df.groupby(['date','collector_name']).size().reset_index(name='count')
-        fig_collector = px.bar(daily_collector, x='date', y='count', color='collector_name', title="Daily Collections per Collector")
-        st.plotly_chart(fig_collector, use_container_width=True)
+        area_summary = submissions_with_area.groupby('area')['quantity'].sum().reset_index()
+
+        fig_area = px.bar(
+            area_summary,
+            x='area',
+            y='quantity',
+            color='area',
+            text='quantity',
+            title="Total Waste Collected per Area (kg)"
+        )
+        fig_area.update_traces(texttemplate='%{text:.2f} kg', textposition='outside')
+        fig_area.update_layout(yaxis_title="Weight (kg)", xaxis_title="Area")
+        st.plotly_chart(fig_area, use_container_width=True)
     else:
         st.warning("No submissions available.")
