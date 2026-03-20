@@ -99,7 +99,7 @@ for key in ['otp_sent','otp_verified','otp_input','logged_in','current_user']:
 # Page: Login / Waste Submission
 # -----------------------------
 if page == "Login / Waste Submission":
-    st.title("⚡ Local Waste & Recycling Incentive System")
+    st.title("♻️ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
     mobile = st.text_input("Mobile Number", key="mobile_input")
