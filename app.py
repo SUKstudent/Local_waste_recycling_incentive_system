@@ -5,12 +5,21 @@ import joblib
 import random
 import string
 
-# --- Light mode and page config ---
-st.set_page_config(page_title="Local Waste Recycling", layout="wide", initial_sidebar_state="auto")
+# --- Page config ---
+st.set_page_config(page_title="Local Waste Recycling", layout="wide", initial_sidebar_state="expanded")
+
+# --- Page-wide light green background matching logo ---
 st.markdown("""
     <style>
-    body, .block-container {
-        background-color: white !important;
+    body, .block-container, .stApp {
+        background-color: #e6f5e6 !important;  /* Light green matching logo */
+        color: black !important;
+    }
+    .stSidebar .sidebar-content {
+        background-color: #d9f0d9 !important;  /* slightly different green for sidebar */
+    }
+    .stButton>button {
+        background-color: #a3d9a5 !important;  /* green buttons */
         color: black !important;
     }
     </style>
@@ -27,13 +36,13 @@ def send_otp_simulation():
     return otp
 
 # --- File paths ---
-data_dir = '.'  # Current folder where app.py and files are
+data_dir = '.'
 users_file = os.path.join(data_dir, 'users_large.csv')
 collectors_file = os.path.join(data_dir, 'collectors_large.csv')
 submissions_file = os.path.join(data_dir, 'submissions_large.csv')
 logo_path = os.path.join(data_dir, "GreenBin.jpg")
 
-# --- Load CSVs safely ---
+# --- Load CSVs ---
 users_df = pd.read_csv(users_file) if os.path.exists(users_file) else pd.DataFrame(
     columns=['user_id','name','mobile','area','total_points','improper_count'])
 collectors_df = pd.read_csv(collectors_file) if os.path.exists(collectors_file) else pd.DataFrame(
@@ -55,9 +64,9 @@ if all(os.path.exists(p) for p in [clf_path, le_user_path, le_collector_path, le
 else:
     clf = None
 
-# --- Sidebar Logo and Navigation ---
+# --- Sidebar ---
 if os.path.exists(logo_path):
-    st.sidebar.image(logo_path, width=220)  # Bigger logo
+    st.sidebar.image(logo_path, width=220)
 else:
     st.sidebar.warning(f"Logo {logo_path} not found!")
 
@@ -86,20 +95,19 @@ if page == "Login / Waste Submission":
     if area == '--Select your area--':
         st.warning("Please select your area from the dropdown!")
 
-    # --- OTP Section ---
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Send/Resend OTP"):
             if mobile:
                 otp = send_otp_simulation()
                 st.session_state['otp_sent'] = True
-                st.session_state['otp_input'] = str(otp)  # Auto-fill OTP input box
+                st.session_state['otp_input'] = str(otp)  # auto-fill OTP
             else:
                 st.error("Enter mobile number!")
 
     with col2:
         otp_input = st.text_input("Enter OTP", value=st.session_state.get('otp_input', ''))
-        st.session_state['otp_input'] = otp_input  # sync with user input
+        st.session_state['otp_input'] = otp_input
 
         if st.button("Verify OTP"):
             if st.session_state.get('otp_sent', False) and otp_input:
@@ -111,7 +119,6 @@ if page == "Login / Waste Submission":
             else:
                 st.warning("Send OTP first!")
 
-    # --- Waste Submission ---
     if st.session_state.get('otp_verified', False) and area != '--Select your area--':
         st.subheader("Submit Waste")
         waste_types = ['Plastic','Paper','Organic','Other']
@@ -141,7 +148,6 @@ if page == "Login / Waste Submission":
             proper = st.radio("Is waste properly segregated?", ("Yes", "No"))
             category = "Dry" if waste_type in ['Plastic','Paper','Other'] else "Wet"
 
-            # Points & status
             if proper == "Yes":
                 points_earned = quantity * points_dict[waste_type]
                 users_df.at[user_index, 'total_points'] += points_earned
@@ -166,7 +172,6 @@ if page == "Login / Waste Submission":
                 collectors_df.at[collector_index, 'total_points'] += points_earned
                 collector_id = collector_row['collector_id']
 
-                # Rating simulation
                 rating = st.slider(f"Rate collector {collector_row['name']}", 1, 5)
                 prev_ratings = collector_row.get('ratings', [])
                 if not isinstance(prev_ratings, list):
@@ -192,7 +197,7 @@ if page == "Login / Waste Submission":
             collectors_df.to_csv(collectors_file, index=False)
             submissions_df.to_csv(submissions_file, index=False)
 
-            # ML Prediction
+            # ML prediction
             if clf is not None:
                 try:
                     user_enc = le_user.transform([user_row['user_id']])[0]
@@ -203,7 +208,7 @@ if page == "Login / Waste Submission":
                 except:
                     st.warning("ML Prediction unavailable for new user/collector.")
 
-# --- Page: User Leaderboard ---
+# --- User Leaderboard ---
 elif page == "User Leaderboard":
     st.subheader("🏆 User Leaderboard")
     if not users_df.empty and {'area', 'name', 'total_points'}.issubset(users_df.columns):
@@ -214,15 +219,15 @@ elif page == "User Leaderboard":
     else:
         st.warning("User Leaderboard unavailable: no data or missing columns")
 
-# --- Page: Collector Leaderboard ---
+# --- Collector Leaderboard ---
 elif page == "Collector Leaderboard":
     st.subheader("🏅 Collector Leaderboard")
     if not collectors_df.empty and {'name', 'assigned_area', 'total_points', 'ratings'}.issubset(collectors_df.columns):
         collectors_df['avg_rating'] = collectors_df['ratings'].apply(
-            lambda x: sum(x) / len(x) if isinstance(x, list) and len(x) > 0 else 0
+            lambda x: sum(x)/len(x) if isinstance(x,list) and len(x)>0 else 0
         )
         collector_board = collectors_df.sort_values('total_points', ascending=False)[
-            ['name', 'assigned_area', 'total_points', 'avg_rating']
+            ['name','assigned_area','total_points','avg_rating']
         ]
         st.table(collector_board)
     else:
