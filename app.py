@@ -101,7 +101,7 @@ if 'otp_input' not in st.session_state:
 # Page: Login / Waste Submission
 # -----------------------------
 if page == "Login / Waste Submission":
-    st.title("⚡ Local Waste & Recycling Incentive System")
+    st.title("♻️ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
     mobile = st.text_input("Mobile Number", key="mobile_input")
