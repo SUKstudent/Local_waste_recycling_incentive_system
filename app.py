@@ -5,7 +5,16 @@ import joblib
 import random
 import string
 
-st.set_page_config(page_title="Local Waste Recycling", layout="wide")
+# --- Light mode and page config ---
+st.set_page_config(page_title="Local Waste Recycling", layout="wide", initial_sidebar_state="auto")
+st.markdown("""
+    <style>
+    body, .block-container {
+        background-color: white !important;
+        color: black !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- Helper functions ---
 def generate_user_id(length=8):
@@ -48,7 +57,7 @@ else:
 
 # --- Sidebar Logo and Navigation ---
 if os.path.exists(logo_path):
-    st.sidebar.image(logo_path, width=120)
+    st.sidebar.image(logo_path, width=220)  # Bigger logo
 else:
     st.sidebar.warning(f"Logo {logo_path} not found!")
 
@@ -60,30 +69,38 @@ if 'otp_sent' not in st.session_state:
     st.session_state['otp_sent'] = False
 if 'otp_verified' not in st.session_state:
     st.session_state['otp_verified'] = False
+if 'otp_input' not in st.session_state:
+    st.session_state['otp_input'] = ''
 
 # --- Page: Login / Waste Submission ---
 if page == "Login / Waste Submission":
     st.title("⚡ Local Waste & Recycling Incentive System")
-
     st.subheader("User Login / Registration")
+
     mobile = st.text_input("Enter your mobile number")
     name = st.text_input("Enter your name")
 
-    area_options = ['Residential Apartment Complex','Hospital','Shopping Mall','Office Complex',
+    area_options = ['--Select your area--', 'Residential Apartment Complex','Hospital','Shopping Mall','Office Complex',
                     'Market','School/College','Railway Station','Bus Terminal','Industrial Area','Hotel']
     area = st.selectbox("Select your area", area_options)
+    if area == '--Select your area--':
+        st.warning("Please select your area from the dropdown!")
 
+    # --- OTP Section ---
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Send/Resend OTP"):
             if mobile:
-                send_otp_simulation()
+                otp = send_otp_simulation()
                 st.session_state['otp_sent'] = True
+                st.session_state['otp_input'] = str(otp)  # Auto-fill OTP input box
             else:
                 st.error("Enter mobile number!")
 
     with col2:
-        otp_input = st.text_input("Enter OTP")
+        otp_input = st.text_input("Enter OTP", value=st.session_state.get('otp_input', ''))
+        st.session_state['otp_input'] = otp_input  # sync with user input
+
         if st.button("Verify OTP"):
             if st.session_state.get('otp_sent', False) and otp_input:
                 if str(st.session_state['otp']) == otp_input:
@@ -95,7 +112,7 @@ if page == "Login / Waste Submission":
                 st.warning("Send OTP first!")
 
     # --- Waste Submission ---
-    if st.session_state.get('otp_verified', False):
+    if st.session_state.get('otp_verified', False) and area != '--Select your area--':
         st.subheader("Submit Waste")
         waste_types = ['Plastic','Paper','Organic','Other']
         waste_type = st.selectbox("Waste Type", waste_types)
@@ -122,7 +139,7 @@ if page == "Login / Waste Submission":
             user_index = users_df[users_df['mobile'] == mobile].index[0]
 
             proper = st.radio("Is waste properly segregated?", ("Yes", "No"))
-            category = "Dry" if waste_type in ['Plastic', 'Paper', 'Other'] else "Wet"
+            category = "Dry" if waste_type in ['Plastic','Paper','Other'] else "Wet"
 
             # Points & status
             if proper == "Yes":
@@ -175,7 +192,7 @@ if page == "Login / Waste Submission":
             collectors_df.to_csv(collectors_file, index=False)
             submissions_df.to_csv(submissions_file, index=False)
 
-            # Real-time ML Prediction
+            # ML Prediction
             if clf is not None:
                 try:
                     user_enc = le_user.transform([user_row['user_id']])[0]
