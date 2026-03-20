@@ -91,7 +91,7 @@ if page == "Login / Waste Submission":
                 else:
                     st.error("Incorrect OTP")
             else:
-                st.warning("Send OTP first!")
+                st.warning("Resend OTP")
 
     # --- Waste Submission ---
     if st.session_state.get('otp_verified', False):
