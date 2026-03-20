@@ -3,18 +3,23 @@ import joblib
 from sklearn.metrics import accuracy_score, classification_report
 import os
 
-# --- Correct path to test CSV ---
-test_file = os.path.join('LocalWaste Project', 'submissions_test.csv')
+# --- Relative paths (no username) ---
+test_file = 'submissions_large.csv'  # same folder
+model_file = 'waste_model.pkl'
+le_user_file = 'encoder_user.pkl'
+le_collector_file = 'encoder_collector.pkl'
+le_waste_file = 'encoder_waste.pkl'
+
+# --- Load test CSV ---
 if not os.path.exists(test_file):
     raise FileNotFoundError(f"{test_file} not found.")
-
 df = pd.read_csv(test_file)
 
 # --- Load model & encoders ---
-clf = joblib.load(os.path.join('LocalWaste Project','waste_model.pkl'))
-le_user = joblib.load(os.path.join('LocalWaste Project','encoder_user.pkl'))
-le_collector = joblib.load(os.path.join('LocalWaste Project','encoder_collector.pkl'))
-le_waste = joblib.load(os.path.join('LocalWaste Project','encoder_waste.pkl'))
+clf = joblib.load(model_file)
+le_user = joblib.load(le_user_file)
+le_collector = joblib.load(le_collector_file)
+le_waste = joblib.load(le_waste_file)
 
 # --- Filter test data to known encoder classes ---
 df = df[df['user_id'].isin(le_user.classes_)]
@@ -27,6 +32,7 @@ df['collector_id_enc'] = le_collector.transform(df['collector_id'])
 df['waste_type_enc'] = le_waste.transform(df['waste_type'])
 df['status_enc'] = df['status'].map({'Proper':1,'Improper':0})
 
+# --- Prepare features & target ---
 X_test = df[['user_id_enc','collector_id_enc','waste_type_enc','quantity']]
 y_test = df['status_enc']
 
