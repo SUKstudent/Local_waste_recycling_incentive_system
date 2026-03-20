@@ -83,7 +83,7 @@ for key in ['otp_sent','otp_verified','otp_input','logged_in','current_user']:
 # Page: Login / Waste Submission
 # -----------------------------
 if page == "Login / Waste Submission":
-    st.title("⚡ Local Waste & Recycling Incentive System")
+    st.title("♻️ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
     mobile = st.text_input("Mobile Number")
@@ -190,29 +190,53 @@ elif page == "User Leaderboard":
         st.table(user_board)
 
 # -----------------------------
-# User Dashboard by Area
+# User Dashboard by Area with Daily Totals
 # -----------------------------
 elif page == "User Dashboard":
     st.subheader("📊 User Dashboard by Area")
+
     submissions_df = st.session_state['submissions_df']
     users_df = st.session_state['users_df']
 
     if submissions_df.empty:
         st.warning("No submissions available yet.")
     else:
+        # Merge area info
         submissions_with_area = submissions_df.merge(
             users_df[['user_id','area']], on='user_id', how='left'
         )
-        area_summary = submissions_with_area.groupby('area')['quantity'].sum().reset_index()
 
+        # All-time total
+        area_summary = submissions_with_area.groupby('area')['quantity'].sum().reset_index()
         fig_area = px.bar(
             area_summary,
             x='area',
             y='quantity',
             color='area',
             text='quantity',
-            title="Total Waste Collected per Area (kg)"
+            title="Total Waste Collected per Area (All Time)"
         )
         fig_area.update_traces(texttemplate='%{text:.2f} kg', textposition='outside')
         fig_area.update_layout(yaxis_title="Weight (kg)", xaxis_title="Area")
         st.plotly_chart(fig_area, use_container_width=True)
+
+        # Daily totals (today)
+        today = pd.Timestamp.now().normalize()
+        today_submissions = submissions_with_area[
+            submissions_with_area['timestamp'] >= today
+        ]
+        if not today_submissions.empty:
+            daily_summary = today_submissions.groupby('area')['quantity'].sum().reset_index()
+            fig_daily = px.bar(
+                daily_summary,
+                x='area',
+                y='quantity',
+                color='area',
+                text='quantity',
+                title="Today's Waste Collected per Area"
+            )
+            fig_daily.update_traces(texttemplate='%{text:.2f} kg', textposition='outside')
+            fig_daily.update_layout(yaxis_title="Weight (kg)", xaxis_title="Area")
+            st.plotly_chart(fig_daily, use_container_width=True)
+        else:
+            st.info("No submissions for today yet.")
