@@ -28,16 +28,18 @@ def generate_user_id(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def send_otp_simulation():
-    otp = random.randint(1000, 9999)
+    """Simulate sending OTP and auto-fill input"""
+    otp = str(random.randint(1000, 9999))  # store as string
     st.session_state['otp'] = otp
     st.session_state['otp_sent'] = True
-    st.info(f"OTP sent to your mobile (Simulated): {otp}")
+    st.session_state['otp_input'] = otp  # auto-fill OTP input
+    st.info(f"OTP sent and auto-filled (Simulated): {otp}")
     return otp
 
 # -----------------------------
 # File paths
 # -----------------------------
-data_dir = '.'  # Current folder
+data_dir = '.'
 users_file = os.path.join(data_dir, 'users_large.csv')
 collectors_file = os.path.join(data_dir, 'collectors_large.csv')
 submissions_file = os.path.join(data_dir, 'submissions_large.csv')
@@ -53,9 +55,7 @@ collectors_df = pd.read_csv(collectors_file) if os.path.exists(collectors_file) 
 submissions_df = pd.read_csv(submissions_file) if os.path.exists(submissions_file) else pd.DataFrame(
     columns=['submission_id','user_id','collector_id','waste_type','quantity','points','status','category','timestamp'])
 
-# -----------------------------
-# Add timestamp column if missing
-# -----------------------------
+# Ensure timestamp column
 if 'timestamp' not in submissions_df.columns:
     submissions_df['timestamp'] = pd.to_datetime('now')
 submissions_df['timestamp'] = pd.to_datetime(submissions_df['timestamp'])
@@ -120,9 +120,9 @@ if page == "Login / Waste Submission":
 
     with col2:
         otp_input = st.text_input("Enter OTP", key="otp_input")
-        # Auto verification
-        if st.session_state.get('otp_sent', False) and otp_input:
-            if str(st.session_state.get('otp')) == otp_input:
+        # Auto-verify OTP if OTP was sent
+        if st.session_state.get('otp_sent', False) and st.session_state.get('otp_input'):
+            if st.session_state['otp_input'] == st.session_state['otp']:
                 st.session_state['otp_verified'] = True
                 st.success("OTP Verified ✅")
             else:
