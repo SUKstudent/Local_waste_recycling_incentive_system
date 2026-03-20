@@ -30,6 +30,7 @@ def generate_user_id(length=8):
 def send_otp_simulation():
     otp = random.randint(1000, 9999)
     st.session_state['otp'] = otp
+    st.session_state['otp_sent'] = True
     st.info(f"OTP sent to your mobile (Simulated): {otp}")
     return otp
 
@@ -57,7 +58,6 @@ submissions_df = pd.read_csv(submissions_file) if os.path.exists(submissions_fil
 # -----------------------------
 if 'timestamp' not in submissions_df.columns:
     submissions_df['timestamp'] = pd.to_datetime('now')
-
 submissions_df['timestamp'] = pd.to_datetime(submissions_df['timestamp'])
 
 # -----------------------------
@@ -88,12 +88,14 @@ st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to:", ["Login / Waste Submission", "User Leaderboard", "Collector Leaderboard", "User Dashboard", "Collector Dashboard"])
 
 # -----------------------------
-# Session state for OTP
+# Session state defaults
 # -----------------------------
 if 'otp_sent' not in st.session_state:
     st.session_state['otp_sent'] = False
 if 'otp_verified' not in st.session_state:
     st.session_state['otp_verified'] = False
+if 'otp_input' not in st.session_state:
+    st.session_state['otp_input'] = ""
 
 # -----------------------------
 # Page: Login / Waste Submission
@@ -102,8 +104,8 @@ if page == "Login / Waste Submission":
     st.title("⚡ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
-    mobile = st.text_input("Mobile Number")
-    name = st.text_input("Name")
+    mobile = st.text_input("Mobile Number", key="mobile_input")
+    name = st.text_input("Name", key="name_input")
     area_options = ['--Select your area--','Residential Apartment Complex','Hospital','Shopping Mall','Office Complex',
                     'Market','School/College','Railway Station','Bus Terminal','Industrial Area','Hotel']
     area = st.selectbox("Select your area", area_options)
@@ -113,22 +115,23 @@ if page == "Login / Waste Submission":
         if st.button("Send/Resend OTP"):
             if mobile:
                 send_otp_simulation()
-                st.session_state['otp_sent'] = True
             else:
                 st.error("Enter mobile number!")
 
     with col2:
-        otp_input = st.text_input("Enter OTP")
-        if st.button("Verify OTP"):
-            if st.session_state.get('otp_sent', False) and otp_input:
-                if str(st.session_state['otp']) == otp_input:
-                    st.success("OTP Verified ✅")
-                    st.session_state['otp_verified'] = True
-                else:
-                    st.error("Incorrect OTP")
+        otp_input = st.text_input("Enter OTP", key="otp_input")
+        # Auto verification
+        if st.session_state.get('otp_sent', False) and otp_input:
+            if str(st.session_state.get('otp')) == otp_input:
+                st.session_state['otp_verified'] = True
+                st.success("OTP Verified ✅")
             else:
-                st.warning("Send OTP first!")
+                st.session_state['otp_verified'] = False
+                st.warning("Incorrect OTP")
 
+    # -----------------------------
+    # Waste Submission Section
+    # -----------------------------
     if st.session_state.get('otp_verified', False):
         st.subheader("Submit Waste")
         waste_types = ['Plastic','Paper','Organic','Other']
@@ -187,10 +190,12 @@ if page == "Login / Waste Submission":
                               'timestamp': datetime.now()}
             submissions_df = pd.concat([submissions_df, pd.DataFrame([new_submission])], ignore_index=True)
 
+            # Save CSVs
             users_df.to_csv(users_file, index=False)
             collectors_df.to_csv(collectors_file, index=False)
             submissions_df.to_csv(submissions_file, index=False)
 
+            # ML prediction
             if clf is not None:
                 try:
                     user_enc = le_user.transform([user_row['user_id']])[0]
@@ -200,60 +205,3 @@ if page == "Login / Waste Submission":
                     st.info(f"AI Prediction: {'Proper ✅' if ml_pred==1 else 'Improper ❌'}")
                 except:
                     st.warning("ML Prediction unavailable for new user/collector.")
-
-# -----------------------------
-# Page: User Leaderboard
-# -----------------------------
-elif page == "User Leaderboard":
-    st.subheader("🏆 User Leaderboard")
-    if not users_df.empty:
-        user_board = users_df.groupby('area')[['name','total_points']].apply(
-            lambda x: x.sort_values('total_points', ascending=False)
-        ).reset_index(drop=True)
-        st.table(user_board)
-    else:
-        st.warning("No user data available.")
-
-# -----------------------------
-# Page: Collector Leaderboard
-# -----------------------------
-elif page == "Collector Leaderboard":
-    st.subheader("🏅 Collector Leaderboard")
-    if not collectors_df.empty:
-        collectors_df['avg_rating'] = collectors_df['ratings'].apply(
-            lambda x: sum(x)/len(x) if isinstance(x,list) and len(x)>0 else 0
-        )
-        collector_board = collectors_df.sort_values('total_points', ascending=False)[
-            ['name','assigned_area','total_points','avg_rating']
-        ]
-        st.table(collector_board)
-    else:
-        st.warning("No collector data available.")
-
-# -----------------------------
-# Page: User Dashboard
-# -----------------------------
-elif page == "User Dashboard":
-    st.subheader("📊 User Dashboard")
-    if not submissions_df.empty:
-        submissions_df['week'] = submissions_df['timestamp'].dt.to_period('W').apply(lambda r: r.start_time)
-        weekly_user = submissions_df.groupby(['week','status']).size().reset_index(name='count')
-        fig_user = px.bar(weekly_user, x='week', y='count', color='status', title="Weekly Proper/Improper Submissions")
-        st.plotly_chart(fig_user, use_container_width=True)
-    else:
-        st.warning("No submissions available.")
-
-# -----------------------------
-# Page: Collector Dashboard
-# -----------------------------
-elif page == "Collector Dashboard":
-    st.subheader("📊 Collector Dashboard")
-    if not submissions_df.empty:
-        submissions_df['collector_name'] = submissions_df['collector_id'].map(
-            dict(zip(collectors_df['collector_id'], collectors_df['name']))
-        )
-        weekly_collector = submissions_df.groupby(['week','collector_name']).size().reset_index(name='count')
-        fig_collector = px.bar(weekly_collector, x='week', y='count', color='collector_name', title="Weekly Collections per Collector")
-        st.plotly_chart(fig_collector, use_container_width=True)
-    else:
-        st.warning("No submissions available.")
