@@ -32,7 +32,7 @@ def send_otp_simulation():
     return otp
 
 # -----------------------------
-# Initialize in-memory data (start with empty leaderboard)
+# Initialize in-memory data
 # -----------------------------
 if 'users_df' not in st.session_state:
     st.session_state['users_df'] = pd.DataFrame(
@@ -40,10 +40,6 @@ if 'users_df' not in st.session_state:
     )
 
 if 'collectors_df' not in st.session_state:
-    st.session_state['collectors_df'] = pd.DataFrame(
-        columns=['collector_id','name','assigned_area','total_points','ratings']
-    )
-    # Example collector for demo purposes
     st.session_state['collectors_df'] = pd.DataFrame([
         {'collector_id':1,'name':'Collector A','assigned_area':'Residential Apartment Complex','total_points':0,'ratings':[]},
         {'collector_id':2,'name':'Collector B','assigned_area':'Market','total_points':0,'ratings':[]}
@@ -53,6 +49,18 @@ if 'submissions_df' not in st.session_state:
     st.session_state['submissions_df'] = pd.DataFrame(
         columns=['submission_id','user_id','collector_id','waste_type','quantity','points','status','category','timestamp']
     )
+
+# -----------------------------
+# Sidebar logo
+# -----------------------------
+logo_path = "GreenBin.jpg"
+fallback_logo_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Recycle_symbol.svg/600px-Recycle_symbol.svg.png"
+
+if os.path.exists(logo_path):
+    st.sidebar.image(logo_path, width=180)
+else:
+    st.sidebar.image(fallback_logo_url, width=180)
+    st.sidebar.warning("Local logo not found! Using fallback logo.")
 
 # -----------------------------
 # Sidebar navigation
@@ -75,7 +83,7 @@ for key in ['otp_sent','otp_verified','otp_input','logged_in','current_user']:
 # Page: Login / Waste Submission
 # -----------------------------
 if page == "Login / Waste Submission":
-    st.title("♻️ Local Waste & Recycling Incentive System")
+    st.title("⚡ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
     mobile = st.text_input("Mobile Number")
