@@ -18,7 +18,7 @@ def send_otp_simulation():
     return otp
 
 # --- File paths ---
-data_dir = 'LocalWaste Project'
+data_dir = '.'  # Current folder where app.py and files are
 users_file = os.path.join(data_dir, 'users_large.csv')
 collectors_file = os.path.join(data_dir, 'collectors_large.csv')
 submissions_file = os.path.join(data_dir, 'submissions_large.csv')
@@ -46,11 +46,11 @@ if all(os.path.exists(p) for p in [clf_path, le_user_path, le_collector_path, le
 else:
     clf = None
 
-# --- Sidebar ---
+# --- Sidebar Logo and Navigation ---
 if os.path.exists(logo_path):
     st.sidebar.image(logo_path, width=120)
 else:
-    st.sidebar.warning("Logo GreenBin.jpg not found!")
+    st.sidebar.warning(f"Logo {logo_path} not found!")
 
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Select Page", ["Login / Waste Submission", "User Leaderboard", "Collector Leaderboard"])
@@ -64,10 +64,11 @@ if 'otp_verified' not in st.session_state:
 # --- Page: Login / Waste Submission ---
 if page == "Login / Waste Submission":
     st.title("⚡ Local Waste & Recycling Incentive System")
-    
+
     st.subheader("User Login / Registration")
     mobile = st.text_input("Enter your mobile number")
     name = st.text_input("Enter your name")
+
     area_options = ['Residential Apartment Complex','Hospital','Shopping Mall','Office Complex',
                     'Market','School/College','Railway Station','Bus Terminal','Industrial Area','Hotel']
     area = st.selectbox("Select your area", area_options)
@@ -91,7 +92,7 @@ if page == "Login / Waste Submission":
                 else:
                     st.error("Incorrect OTP")
             else:
-                st.warning("Resend OTP")
+                st.warning("Send OTP first!")
 
     # --- Waste Submission ---
     if st.session_state.get('otp_verified', False):
@@ -102,9 +103,9 @@ if page == "Login / Waste Submission":
         submit_btn = st.button("Submit Waste")
         points_dict = {'Plastic':10,'Paper':5,'Organic':2,'Other':1}
 
-        if submit_btn and quantity>0:
+        if submit_btn and quantity > 0:
             # Add user if new
-            existing_user = users_df[users_df['mobile']==mobile]
+            existing_user = users_df[users_df['mobile'] == mobile]
             if existing_user.empty:
                 new_user = {
                     'user_id': generate_user_id(),
@@ -112,53 +113,53 @@ if page == "Login / Waste Submission":
                     'mobile': mobile,
                     'area': area,
                     'total_points': 0,
-                    'improper_count':0
+                    'improper_count': 0
                 }
                 users_df = pd.concat([users_df, pd.DataFrame([new_user])], ignore_index=True)
                 user_row = new_user
             else:
                 user_row = existing_user.iloc[0]
-            user_index = users_df[users_df['mobile']==mobile].index[0]
+            user_index = users_df[users_df['mobile'] == mobile].index[0]
 
-            proper = st.radio("Is waste properly segregated?", ("Yes","No"))
-            category = "Dry" if waste_type in ['Plastic','Paper','Other'] else "Wet"
+            proper = st.radio("Is waste properly segregated?", ("Yes", "No"))
+            category = "Dry" if waste_type in ['Plastic', 'Paper', 'Other'] else "Wet"
 
             # Points & status
-            if proper=="Yes":
+            if proper == "Yes":
                 points_earned = quantity * points_dict[waste_type]
-                users_df.at[user_index,'total_points'] += points_earned
+                users_df.at[user_index, 'total_points'] += points_earned
                 status = "Proper"
                 st.success(f"Points Earned: {points_earned} | Category: {category}")
             else:
-                users_df.at[user_index,'improper_count'] += 1
-                improper_count = users_df.at[user_index,'improper_count']
+                users_df.at[user_index, 'improper_count'] += 1
+                improper_count = users_df.at[user_index, 'improper_count']
                 points_earned = 0
                 status = "Improper"
                 st.warning(f"Submission Improper | Category: {category}")
                 if improper_count > 2:
                     st.error("Third improper submission: 1 point deducted!")
-                    users_df.at[user_index,'total_points'] -= 1
+                    users_df.at[user_index, 'total_points'] -= 1
 
             # Assign collector
-            area_collectors = collectors_df[collectors_df['assigned_area']==area]
+            area_collectors = collectors_df[collectors_df['assigned_area'] == area]
             collector_id = None
             if not area_collectors.empty:
                 collector_row = area_collectors.iloc[0]
                 collector_index = area_collectors.index[0]
-                collectors_df.at[collector_index,'total_points'] += points_earned
+                collectors_df.at[collector_index, 'total_points'] += points_earned
                 collector_id = collector_row['collector_id']
 
                 # Rating simulation
                 rating = st.slider(f"Rate collector {collector_row['name']}", 1, 5)
                 prev_ratings = collector_row.get('ratings', [])
-                if not isinstance(prev_ratings,list):
+                if not isinstance(prev_ratings, list):
                     prev_ratings = []
                 prev_ratings.append(rating)
-                collectors_df.at[collector_index,'ratings'] = prev_ratings
+                collectors_df.at[collector_index, 'ratings'] = prev_ratings
 
             # Record submission
             new_submission = {
-                'submission_id': len(submissions_df)+1,
+                'submission_id': len(submissions_df) + 1,
                 'user_id': user_row['user_id'],
                 'collector_id': collector_id,
                 'waste_type': waste_type,
@@ -181,15 +182,15 @@ if page == "Login / Waste Submission":
                     collector_enc = le_collector.transform([collector_id if collector_id else 0])[0]
                     waste_enc = le_waste.transform([waste_type])[0]
                     ml_pred = clf.predict([[user_enc, collector_enc, waste_enc, quantity]])[0]
-                    st.info(f"AI Prediction: {'Proper ✅' if ml_pred==1 else 'Improper ❌'}")
+                    st.info(f"AI Prediction: {'Proper ✅' if ml_pred == 1 else 'Improper ❌'}")
                 except:
                     st.warning("ML Prediction unavailable for new user/collector.")
 
 # --- Page: User Leaderboard ---
 elif page == "User Leaderboard":
     st.subheader("🏆 User Leaderboard")
-    if not users_df.empty and {'area','name','total_points'}.issubset(users_df.columns):
-        user_board = users_df.groupby('area')[['name','total_points']].apply(
+    if not users_df.empty and {'area', 'name', 'total_points'}.issubset(users_df.columns):
+        user_board = users_df.groupby('area')[['name', 'total_points']].apply(
             lambda x: x.sort_values('total_points', ascending=False)
         ).reset_index(drop=True)
         st.table(user_board)
@@ -199,12 +200,12 @@ elif page == "User Leaderboard":
 # --- Page: Collector Leaderboard ---
 elif page == "Collector Leaderboard":
     st.subheader("🏅 Collector Leaderboard")
-    if not collectors_df.empty and {'name','assigned_area','total_points','ratings'}.issubset(collectors_df.columns):
+    if not collectors_df.empty and {'name', 'assigned_area', 'total_points', 'ratings'}.issubset(collectors_df.columns):
         collectors_df['avg_rating'] = collectors_df['ratings'].apply(
-            lambda x: sum(x)/len(x) if isinstance(x,list) and len(x)>0 else 0
+            lambda x: sum(x) / len(x) if isinstance(x, list) and len(x) > 0 else 0
         )
         collector_board = collectors_df.sort_values('total_points', ascending=False)[
-            ['name','assigned_area','total_points','avg_rating']
+            ['name', 'assigned_area', 'total_points', 'avg_rating']
         ]
         st.table(collector_board)
     else:
