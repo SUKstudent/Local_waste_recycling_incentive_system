@@ -3,7 +3,7 @@ import joblib
 from sklearn.metrics import accuracy_score, classification_report
 import os
 
-# --- Relative paths (no username) ---
+# --- Relative paths ---
 test_file = 'submissions_large.csv'  # same folder
 model_file = 'waste_model.pkl'
 le_user_file = 'encoder_user.pkl'
