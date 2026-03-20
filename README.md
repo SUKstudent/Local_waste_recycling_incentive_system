@@ -1,4 +1,4 @@
-# ⚡ Local Waste & Recycling Incentive System
+# ♻️ Local Waste & Recycling Incentive System
 
 A full-stack Streamlit web application that encourages proper waste segregation and recycling by awarding points to users and collectors based on their submissions.
 
