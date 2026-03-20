@@ -12,7 +12,7 @@ def generate_user_id(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def send_otp_simulation():
-    otp = random.randint(1000,9999)
+    otp = random.randint(1000, 9999)
     st.session_state['otp'] = otp
     st.info(f"OTP sent to your mobile (Simulated): {otp}")
     return otp
@@ -52,34 +52,39 @@ name = st.text_input("Enter your name")
 area_options = ['Residential Apartment Complex','Hospital','Shopping Mall','Office Complex','Market','School/College','Railway Station','Bus Terminal','Industrial Area','Hotel']
 area = st.selectbox("Select your area", area_options)
 
+if 'otp_sent' not in st.session_state:
+    st.session_state['otp_sent'] = False
 if 'otp_verified' not in st.session_state:
     st.session_state['otp_verified'] = False
 
-if st.button("Send OTP"):
-    if mobile:
-        send_otp_simulation()
-    else:
-        st.error("Enter mobile number!")
-
-otp_input = st.text_input("Enter OTP")
-if st.button("Verify OTP"):
-    if 'otp' in st.session_state and otp_input:
-        if str(st.session_state['otp']) == otp_input:
-            st.success("OTP Verified ✅")
-            st.session_state['otp_verified'] = True
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Send/Resend OTP"):
+        if mobile:
+            send_otp_simulation()
+            st.session_state['otp_sent'] = True
         else:
-            st.error("Incorrect OTP")
-    else:
-        st.warning("Send OTP first!")
+            st.error("Enter mobile number!")
+
+with col2:
+    otp_input = st.text_input("Enter OTP")
+    if st.button("Verify OTP"):
+        if st.session_state.get('otp_sent', False) and otp_input:
+            if str(st.session_state['otp']) == otp_input:
+                st.success("OTP Verified ✅")
+                st.session_state['otp_verified'] = True
+            else:
+                st.error("Incorrect OTP")
+        else:
+            st.warning("Send OTP first!")
 
 # --- Waste Submission ---
-if st.session_state['otp_verified']:
+if st.session_state.get('otp_verified', False):
     st.subheader("Submit Waste")
     waste_types = ['Plastic','Paper','Organic','Other']
     waste_type = st.selectbox("Waste Type", waste_types)
     quantity = st.number_input("Quantity (kg)", min_value=0.0, step=0.1)
     submit_btn = st.button("Submit Waste")
-
     points_dict = {'Plastic':10,'Paper':5,'Organic':2,'Other':1}
 
     if submit_btn and quantity>0:
