@@ -8,18 +8,15 @@ import plotly.express as px
 from datetime import datetime
 
 # -----------------------------
-# Page config and light theme
+# Page config and theme
 # -----------------------------
 st.set_page_config(page_title="Local Waste Recycling", layout="wide")
-st.markdown(
-    """
-    <style>
-    .css-18ni7ap.e8zbici2 {background-color: #e6f7e6;}  /* Light green background */
-    .stButton button {background-color: #4CAF50; color: white;}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+<style>
+.css-18ni7ap.e8zbici2 {background-color: #e6f7e6;}
+.stButton button {background-color: #4CAF50; color: white;}
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
 # Helper functions
@@ -28,11 +25,10 @@ def generate_user_id(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def send_otp_simulation():
-    """Simulate sending OTP and auto-fill input"""
-    otp = str(random.randint(1000, 9999))  # store as string
+    otp = str(random.randint(1000, 9999))
     st.session_state['otp'] = otp
     st.session_state['otp_sent'] = True
-    st.session_state['otp_input'] = otp  # auto-fill OTP input
+    st.session_state['otp_input'] = otp
     st.info(f"OTP sent and auto-filled (Simulated): {otp}")
     return otp
 
@@ -55,10 +51,12 @@ collectors_df = pd.read_csv(collectors_file) if os.path.exists(collectors_file) 
 submissions_df = pd.read_csv(submissions_file) if os.path.exists(submissions_file) else pd.DataFrame(
     columns=['submission_id','user_id','collector_id','waste_type','quantity','points','status','category','timestamp'])
 
-# Ensure timestamp column
+# Ensure timestamp columns
 if 'timestamp' not in submissions_df.columns:
     submissions_df['timestamp'] = pd.to_datetime('now')
 submissions_df['timestamp'] = pd.to_datetime(submissions_df['timestamp'])
+submissions_df['date'] = submissions_df['timestamp'].dt.date
+submissions_df['week'] = submissions_df['timestamp'].dt.to_period('W').apply(lambda r: r.start_time)
 
 # -----------------------------
 # Load ML models if exist
@@ -77,7 +75,7 @@ else:
     clf = None
 
 # -----------------------------
-# Sidebar Logo and Navigation
+# Sidebar navigation
 # -----------------------------
 if os.path.exists(logo_path):
     st.sidebar.image(logo_path, width=180)
@@ -85,23 +83,23 @@ else:
     st.sidebar.warning(f"Logo {logo_path} not found!")
 
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to:", ["Login / Waste Submission", "User Leaderboard", "Collector Leaderboard", "User Dashboard", "Collector Dashboard"])
+page = st.sidebar.radio("Go to:", [
+    "Login / Waste Submission", "User Leaderboard", 
+    "Collector Leaderboard", "User Dashboard", "Collector Dashboard"
+])
 
 # -----------------------------
 # Session state defaults
 # -----------------------------
-if 'otp_sent' not in st.session_state:
-    st.session_state['otp_sent'] = False
-if 'otp_verified' not in st.session_state:
-    st.session_state['otp_verified'] = False
-if 'otp_input' not in st.session_state:
-    st.session_state['otp_input'] = ""
+for key in ['otp_sent','otp_verified','otp_input','logged_in','current_user']:
+    if key not in st.session_state:
+        st.session_state[key] = False if 'otp' not in key and 'logged_in' not in key else ""
 
 # -----------------------------
 # Page: Login / Waste Submission
 # -----------------------------
 if page == "Login / Waste Submission":
-    st.title("♻️ Local Waste & Recycling Incentive System")
+    st.title("⚡ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
     mobile = st.text_input("Mobile Number", key="mobile_input")
@@ -120,20 +118,28 @@ if page == "Login / Waste Submission":
 
     with col2:
         otp_input = st.text_input("Enter OTP", key="otp_input")
-        # Auto-verify OTP if OTP was sent
+        # Auto verify OTP
         if st.session_state.get('otp_sent', False) and st.session_state.get('otp_input'):
             if st.session_state['otp_input'] == st.session_state['otp']:
                 st.session_state['otp_verified'] = True
+                st.session_state['logged_in'] = True
+                st.session_state['current_user'] = {'mobile': mobile, 'name': name, 'area': area}
                 st.success("OTP Verified ✅")
             else:
                 st.session_state['otp_verified'] = False
                 st.warning("Incorrect OTP")
 
     # -----------------------------
-    # Waste Submission Section
+    # Welcome message after login
     # -----------------------------
-    if st.session_state.get('otp_verified', False):
-        st.subheader("Submit Waste")
+    if st.session_state.get('logged_in', False):
+        user = st.session_state['current_user']
+        st.subheader(f"🎉 Welcome, {user['name']}!")
+        st.write(f"You are logged in from {user['area']}. Proceed to submit your waste below.")
+
+        # -----------------------------
+        # Waste Submission Section
+        # -----------------------------
         waste_types = ['Plastic','Paper','Organic','Other']
         waste_type = st.selectbox("Waste Type", waste_types)
         quantity = st.number_input("Quantity (kg)", min_value=0.0, step=0.1)
@@ -205,3 +211,57 @@ if page == "Login / Waste Submission":
                     st.info(f"AI Prediction: {'Proper ✅' if ml_pred==1 else 'Improper ❌'}")
                 except:
                     st.warning("ML Prediction unavailable for new user/collector.")
+
+# -----------------------------
+# User Leaderboard
+# -----------------------------
+elif page == "User Leaderboard":
+    st.subheader("🏆 User Leaderboard")
+    if not users_df.empty:
+        user_board = users_df.sort_values('total_points', ascending=False)[['name','area','total_points']]
+        st.table(user_board)
+    else:
+        st.warning("No user data available.")
+
+# -----------------------------
+# Collector Leaderboard
+# -----------------------------
+elif page == "Collector Leaderboard":
+    st.subheader("🏅 Collector Leaderboard")
+    if not collectors_df.empty:
+        collectors_df['avg_rating'] = collectors_df['ratings'].apply(
+            lambda x: sum(x)/len(x) if isinstance(x,list) and len(x)>0 else 0
+        )
+        collector_board = collectors_df.sort_values('total_points', ascending=False)[
+            ['name','assigned_area','total_points','avg_rating']
+        ]
+        st.table(collector_board)
+    else:
+        st.warning("No collector data available.")
+
+# -----------------------------
+# User Daily Dashboard
+# -----------------------------
+elif page == "User Dashboard":
+    st.subheader("📊 User Daily Dashboard")
+    if not submissions_df.empty:
+        daily_user = submissions_df.groupby(['date','status']).size().reset_index(name='count')
+        fig_user = px.bar(daily_user, x='date', y='count', color='status', title="Daily Proper/Improper Submissions")
+        st.plotly_chart(fig_user, use_container_width=True)
+    else:
+        st.warning("No submissions available.")
+
+# -----------------------------
+# Collector Daily Dashboard
+# -----------------------------
+elif page == "Collector Dashboard":
+    st.subheader("📊 Collector Daily Dashboard")
+    if not submissions_df.empty:
+        submissions_df['collector_name'] = submissions_df['collector_id'].map(
+            dict(zip(collectors_df['collector_id'], collectors_df['name']))
+        )
+        daily_collector = submissions_df.groupby(['date','collector_name']).size().reset_index(name='count')
+        fig_collector = px.bar(daily_collector, x='date', y='count', color='collector_name', title="Daily Collections per Collector")
+        st.plotly_chart(fig_collector, use_container_width=True)
+    else:
+        st.warning("No submissions available.")
