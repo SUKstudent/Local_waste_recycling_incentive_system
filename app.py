@@ -83,7 +83,7 @@ for key in ['otp_sent','otp_verified','otp_input','logged_in','current_user']:
 # Page: Login / Waste Submission
 # -----------------------------
 if page == "Login / Waste Submission":
-    st.title("♻️ Local Waste & Recycling Incentive System")
+    st.title("⚡ Local Waste & Recycling Incentive System")
 
     st.subheader("User Login / Registration")
     mobile = st.text_input("Mobile Number")
@@ -156,16 +156,21 @@ if page == "Login / Waste Submission":
                     st.error("Third improper submission: 1 point deducted!")
                     st.session_state['users_df'].at[user_index,'total_points'] -= 1
 
-            # Assign collector from area
+            # -----------------------------
+            # Auto-assign collector based on area with least points
+            # -----------------------------
             collectors_df = st.session_state['collectors_df']
             area_collectors = collectors_df[collectors_df['assigned_area']==area]
+
             collector_name = None
             collector_id = None
+
             if not area_collectors.empty:
-                collector_row = area_collectors.iloc[0]
+                collector_row = area_collectors.sort_values('total_points').iloc[0]
                 collector_id = collector_row['collector_id']
                 collector_name = collector_row['name']
-                st.session_state['collectors_df'].at[area_collectors.index[0],'total_points'] += points_earned
+                idx = collectors_df[collectors_df['collector_id']==collector_id].index[0]
+                st.session_state['collectors_df'].at[idx,'total_points'] += points_earned
 
             # Save submission
             submissions_df = st.session_state['submissions_df']
