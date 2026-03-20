@@ -1,86 +1,42 @@
 import streamlit as st
 import pandas as pd
+import joblib
 import os
-from sklearn.model_selection import train_test_split
-import random
 
-# --- File paths ---
-users_file = 'users_large.csv'
-collectors_file = 'collectors_large.csv'
-submissions_file = 'submissions_large.csv'
+st.set_page_config(page_title="Local Waste Recycling", layout="wide")
 
-# --- Load CSVs or generate if not exists ---
-areas = [
-    'Residential Apartment Complex',
-    'Hospital',
-    'Shopping Mall',
-    'Office Complex',
-    'Market',
-    'School/College',
-    'Railway Station',
-    'Bus Terminal',
-    'Industrial Area',
-    'Hotel'
-]
+# --- Load CSVs ---
+users_file = 'LocalWaste Project/users_large.csv'
+collectors_file = 'LocalWaste Project/collectors_large.csv'
+submissions_file = 'LocalWaste Project/submissions_large.csv'
 
-def generate_files():
-    # Users
-    users_list = [{'user_id': i, 'name': f'User{i}', 'area': random.choice(areas),
-                   'total_points': 0, 'improper_count': 0} for i in range(1, 51)]
-    users_df = pd.DataFrame(users_list)
-    
-    # Collectors
-    collectors_list = [{'collector_id': i, 'name': f'Collector{i}', 'assigned_area': random.choice(areas),
-                        'total_points': 0} for i in range(1, 11)]
-    collectors_df = pd.DataFrame(collectors_list)
-    
-    # Submissions
-    waste_types = ['Plastic', 'Paper', 'Organic', 'Other']
-    waste_category = {'Plastic': 'Dry', 'Paper': 'Dry', 'Organic': 'Wet', 'Other': 'Dry'}
-    submissions_list = []
-    for i in range(1, 201):
-        user = random.choice(users_list)
-        collector_candidates = [c for c in collectors_list if c['assigned_area']==user['area']]
-        collector = random.choice(collector_candidates) if collector_candidates else random.choice(collectors_list)
-        waste_type = random.choice(waste_types)
-        quantity = round(random.uniform(0.5, 5.0), 1)
-        proper = random.choices(['Proper','Improper'], weights=[0.8,0.2])[0]
-        points = quantity * (10 if waste_type=='Plastic' else 5 if waste_type=='Paper' else 2 if waste_type=='Organic' else 1) if proper=='Proper' else 0
-        submissions_list.append({
-            'submission_id': i,
-            'user_id': user['user_id'],
-            'collector_id': collector['collector_id'],
-            'waste_type': waste_type,
-            'quantity': quantity,
-            'points': points,
-            'status': proper,
-            'category': waste_category[waste_type]
-        })
-    submissions_df = pd.DataFrame(submissions_list)
-    
-    # Save
-    users_df.to_csv(users_file, index=False)
-    collectors_df.to_csv(collectors_file, index=False)
-    submissions_df.to_csv(submissions_file, index=False)
-
-# Check files
-if not (os.path.exists(users_file) and os.path.exists(collectors_file) and os.path.exists(submissions_file)):
-    generate_files()
-
-# Load
 users_df = pd.read_csv(users_file)
 collectors_df = pd.read_csv(collectors_file)
 submissions_df = pd.read_csv(submissions_file)
 
-# --- Streamlit UI ---
+# --- Load model & encoders ---
+clf_path = 'LocalWaste Project/waste_model.pkl'
+le_user_path = 'LocalWaste Project/encoder_user.pkl'
+le_collector_path = 'LocalWaste Project/encoder_collector.pkl'
+le_waste_path = 'LocalWaste Project/encoder_waste.pkl'
+
+if all(os.path.exists(p) for p in [clf_path, le_user_path, le_collector_path, le_waste_path]):
+    clf = joblib.load(clf_path)
+    le_user = joblib.load(le_user_path)
+    le_collector = joblib.load(le_collector_path)
+    le_waste = joblib.load(le_waste_path)
+else:
+    st.warning("ML model not trained yet. Run train_model.py first.")
+    clf = None
+
+# --- UI ---
 st.title("⚡ Local Waste & Recycling Incentive System")
 
-# Waste options
+areas = users_df['area'].unique().tolist()
 waste_types = ['Plastic', 'Paper', 'Organic', 'Other']
-waste_category = {'Plastic': 'Dry', 'Paper': 'Dry', 'Organic': 'Wet', 'Other': 'Dry'}
 points_dict = {'Plastic':10, 'Paper':5, 'Organic':2, 'Other':1}
 
-st.subheader("## Submit Waste")
+st.subheader("Submit Waste")
 user_name = st.text_input("Enter your name")
 user_area = st.selectbox("Select your area", areas)
 waste_type = st.selectbox("Waste Type", waste_types)
@@ -93,12 +49,12 @@ if submit_btn and user_name and quantity>0:
         new_user = {'user_id': len(users_df)+1, 'name': user_name, 'area': user_area,
                     'total_points': 0, 'improper_count':0}
         users_df = pd.concat([users_df, pd.DataFrame([new_user])], ignore_index=True)
-    
+
     user_row = users_df[users_df['name']==user_name].iloc[0]
     user_index = users_df[users_df['name']==user_name].index[0]
 
     proper = st.radio("Is waste properly segregated?", ("Yes","No"))
-    category = waste_category[waste_type]
+    category = "Dry" if waste_type in ['Plastic','Paper','Other'] else "Wet"
 
     if proper=="Yes":
         points_earned = quantity * points_dict[waste_type]
@@ -142,16 +98,20 @@ if submit_btn and user_name and quantity>0:
     collectors_df.to_csv(collectors_file, index=False)
     submissions_df.to_csv(submissions_file, index=False)
 
+    # Real-time ML Prediction
+    if clf is not None:
+        try:
+            user_enc = le_user.transform([user_row['user_id']])[0]
+            collector_enc = le_collector.transform([collector_id if collector_id else 0])[0]
+            waste_enc = le_waste.transform([waste_type])[0]
+            ml_pred = clf.predict([[user_enc, collector_enc, waste_enc, quantity]])[0]
+            st.info(f"AI Prediction: {'Proper ✅' if ml_pred==1 else 'Improper ❌'}")
+        except Exception as e:
+            st.warning("ML Prediction unavailable for new user or collector.")
+
 # --- Leaderboards ---
-st.subheader("## User Leaderboard")
+st.subheader("User Leaderboard")
 st.table(users_df.sort_values(by='total_points', ascending=False)[['name','area','total_points']])
 
-st.subheader("## Collector Leaderboard")
+st.subheader("Collector Leaderboard")
 st.table(collectors_df.sort_values(by='total_points', ascending=False)[['name','assigned_area','total_points']])
-
-# --- Train/Test Split ---
-if st.button("Generate Train/Test CSVs"):
-    train_df, test_df = train_test_split(submissions_df, test_size=0.2, random_state=42)
-    train_df.to_csv('submissions_train.csv', index=False)
-    test_df.to_csv('submissions_test.csv', index=False)
-    st.success(f"Train/Test CSVs generated! Train: {train_df.shape[0]}, Test: {test_df.shape[0]}")
