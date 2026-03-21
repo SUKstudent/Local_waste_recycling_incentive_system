@@ -6,37 +6,81 @@ import plotly.express as px
 from datetime import datetime, date
 
 # -----------------------------
-# Page Config & Styling
+# Page Config
 # -----------------------------
-st.set_page_config(page_title="Recycle Rewards", layout="wide")
+st.set_page_config(
+    page_title="Recycle Rewards",
+    layout="wide",
+    page_icon="♻️"
+)
 
-# Global CSS to fix input and button styling for readability
+# -----------------------------
+# Dark Theme + Logo CSS
+# -----------------------------
 st.markdown("""
 <style>
-input, textarea {
-    background-color: white !important;
-    color: black !important;
+/* App background */
+[data-testid="stAppViewContainer"] {
+    background-color: #121212;
+    color: #ffffff;
+}
+
+/* Cards and metrics */
+.stMetric, .css-1v3fvcr { 
+    background-color: #1e1e1e !important; 
+    color: #ffffff !important; 
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+}
+
+/* Inputs, selects, textareas */
+input, textarea, select {
+    background-color: #333333 !important;
+    color: #ffffff !important;
     border-radius: 5px !important;
     padding: 0.5em !important;
+    border: 1px solid #555555 !important;
 }
+
+/* Buttons */
 .stButton>button {
-    width: 100%;
-    border-radius: 5px;
-    height: 3em;
-    background-color: #2e7d32;
+    background-color: #2e7d32 !important;
+    color: white !important;
+    width: 100% !important;
+    height: 3em !important;
+    border-radius: 5px !important;
+    font-weight: bold !important;
+}
+
+/* Logo + header */
+.header-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.header-container img {
+    width: 60px;
+    height: 60px;
+}
+.header-container h1 {
     color: white;
-}
-.main {
-    background-color: #f9fbf9;
-}
-.stMetric {
-    background-color: #ffffff;
-    padding: 15px;
-    border-radius: 10px;
-    box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+    margin: 0;
 }
 </style>
 """, unsafe_allow_html=True)
+
+# -----------------------------
+# Header with Logo (.jpg)
+# -----------------------------
+st.markdown(
+    """
+    <div class="header-container">
+        <img src="GreenBin.jpg">
+        <h1>♻️ Recycle Rewards</h1>
+    </div>
+    """, unsafe_allow_html=True
+)
 
 # -----------------------------
 # Helper Functions
@@ -106,18 +150,18 @@ if st.session_state['logged_in']:
 # USER FLOW
 # -----------------------------
 if role == "User":
-    st.title("♻️ Recycle Rewards - User Portal")
+    st.subheader("User Portal")
     
     if not st.session_state['logged_in']:
-        tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
+        tab1, tab2 = st.tabs(["Login", "Register"])
 
-        # LOGIN
+        # Login Tab
         with tab1:
-            login_mobile = st.text_input("Enter Mobile Number", placeholder="e.g. 9876543210")
+            login_mobile = st.text_input("Mobile Number", placeholder="e.g. 9876543210")
             if st.button("Login"):
                 users = st.session_state['users_df']
                 if not users.empty:
-                    matched_users = users[users['mobile'] == login_mobile]
+                    matched_users = users[users['mobile']==login_mobile]
                     if not matched_users.empty:
                         user_data = matched_users.iloc[0]
                         st.session_state['logged_in'] = True
@@ -134,22 +178,21 @@ if role == "User":
                 else:
                     st.error("No users registered yet. Please register first.")
 
-        # REGISTER
+        # Register Tab
         with tab2:
             col1, col2 = st.columns(2)
             with col1:
                 u_name = st.text_input("Full Name", key="reg_name")
                 u_mobile = st.text_input("Mobile Number", key="reg_mobile")
             with col2:
-                u_area = st.selectbox("Your Location Area", ["--Select area--",
+                u_area = st.selectbox("Your Area", ["--Select area--",
                     "Residential Apartment Complex","Hospital","Shopping Mall",
                     "Office Complex","Market","Industrial Area"])
             if u_area != "--Select area--":
-                st.info("A collector will be assigned to you once registration is complete.")
+                st.info("Collector will be assigned after registration.")
 
-            # Auto OTP
             if st.button("Send OTP"):
-                if not u_name or not u_mobile or u_area == "--Select area--":
+                if not u_name or not u_mobile or u_area=="--Select area--":
                     st.error("Fill all details before sending OTP")
                 else:
                     st.session_state['otp_value'] = generate_otp()
@@ -165,14 +208,13 @@ if role == "User":
                 st.session_state['otp_sent'] = False
 
     else:
-        # AFTER LOGIN
+        # AFTER LOGIN: Show form
         user = st.session_state['current_user']
-        st.success(f"Logged in as: **{user['name']}** | Area: **{user['area']}**")
-        assigned = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area'] == user['area']]
+        st.success(f"Logged in as: {user['name']} | Area: {user['area']}")
+        assigned = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area']==user['area']]
         if not assigned.empty:
             st.info(f"Your Collector Assigned: **{assigned.iloc[0]['name']}** 🚚 En route...")
 
-        # Waste Submission Form
         with st.form("waste_form"):
             w_type = st.selectbox("Waste Type", ['Plastic','Paper','Organic','Metal','Glass'])
             w_qty = st.number_input("Quantity (kg)", min_value=0.1, step=0.1)
@@ -187,9 +229,9 @@ if role == "User":
                 if not area_match.empty:
                     selected = area_match.sort_values('total_points').iloc[0]
                     c_id, c_name = selected['collector_id'], selected['name']
-                    idx = st.session_state['collectors_df'][st.session_state['collectors_df']['collector_id']==c_id].index[0]
+                    idx = st.session_state['collectors_df'].loc[st.session_state['collectors_df']['collector_id']==c_id].index[0]
                     st.session_state['collectors_df'].at[idx,'total_points'] += earned
-                else: c_id, c_name = None, "Unassigned"
+                else: c_id, c_name = None,"Unassigned"
 
                 # Update user points
                 u_idx = st.session_state['users_df'][st.session_state['users_df']['mobile']==user['mobile']].index[0]
@@ -210,8 +252,7 @@ if role == "User":
 # ADMIN FLOW
 # -----------------------------
 elif role=="Admin":
-    st.title("🏛️ Municipal Admin Dashboard")
-    st.subheader("Login with admin credentials")
+    st.subheader("Admin Portal")
     admin_user = st.text_input("Username", placeholder="admin")
     admin_pass = st.text_input("Password", type="password", placeholder="admin123")
     if st.button("Admin Login"):
@@ -220,7 +261,6 @@ elif role=="Admin":
             st.session_state['logged_in'] = True
             st.session_state['role_logged_in'] = 'Admin'
 
-            # Daily points update
             if st.session_state['last_points_update'] != date.today():
                 update_daily_points()
                 st.info(f"Daily points updated for {date.today()} ✅")
@@ -238,7 +278,8 @@ elif role=="Admin":
             st.subheader("Area-wise Waste Collection")
             if not df.empty:
                 area_waste = df.groupby('area')['quantity'].sum().reset_index()
-                fig = px.bar(area_waste, x='area', y='quantity', title="Waste Collected per Area", labels={'quantity':'Total Waste (kg)'})
+                fig = px.bar(area_waste, x='area', y='quantity', title="Waste Collected per Area",
+                             labels={'quantity':'Total Waste (kg)'})
                 st.plotly_chart(fig, use_container_width=True)
 
             # Segregation Pie
@@ -246,17 +287,9 @@ elif role=="Admin":
             if not df.empty:
                 status_df = df['status'].value_counts().reset_index()
                 status_df.columns=['status','count']
-                fig2 = px.pie(status_df, names='status', values='count', color_discrete_map={'Proper':'#27ae60','Improper':'#c0392b'})
+                fig2 = px.pie(status_df, names='status', values='count',
+                              color_discrete_map={'Proper':'#27ae60','Improper':'#c0392b'})
                 st.plotly_chart(fig2, use_container_width=True)
-
-            # Daily Trends Line Chart
-            st.subheader("Daily Collection Trends")
-            if not df.empty:
-                df['date'] = pd.to_datetime(df['timestamp']).dt.date
-                line_df = df.groupby(['date','area'])['quantity'].sum().reset_index()
-                fig3 = px.line(line_df, x='date', y='quantity', color='area', markers=True,
-                               labels={'quantity':'Total Waste (kg)','date':'Date','area':'Area'})
-                st.plotly_chart(fig3, use_container_width=True)
 
             # Leaderboard
             st.subheader("Community Leaderboard")
