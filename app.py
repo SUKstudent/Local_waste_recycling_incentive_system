@@ -3,26 +3,19 @@ import pandas as pd
 import random
 import string
 from datetime import datetime, date
-import plotly.express as px
-import plotly.graph_objects as go
 
 # -----------------------------
 # Page Config
 # -----------------------------
-st.set_page_config(
-    page_title="Recycle Rewards",
-    layout="wide",
-    page_icon="♻️"
-)
+st.set_page_config(page_title="Recycle Rewards", layout="wide", page_icon="♻️")
 
 # -----------------------------
-# Sidebar: Logo + Description
+# Sidebar Logo + Description
 # -----------------------------
 st.sidebar.image("GreenBin.jpg", width=200)
 st.sidebar.markdown("""
 # ♻️ Recycle Rewards
-Ek local waste recycling incentive system. 
-Submit karo apna waste aur earn points!  
+Local waste recycling incentive system. Submit waste, earn points, and unlock badges!
 """)
 
 # -----------------------------
@@ -31,10 +24,10 @@ Submit karo apna waste aur earn points!
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] { background-color: #121212; color: #ffffff; }
-input, textarea, select { background-color: #333333 !important; color: #ffffff !important; border-radius: 5px !important; border: 1px solid #555555 !important; padding: 0.5em !important; }
-.stButton>button { background-color: #2e7d32 !important; color: white !important; width: 100% !important; height: 3em !important; border-radius: 5px !important; font-weight: bold !important; }
-.stAlert { background-color: #2a2a2a !important; color: #fff !important; }
-hr { border-color: #2e7d32; margin-top: 0.5rem; margin-bottom: 1rem; }
+input, textarea, select { background-color: #333 !important; color: #fff !important; border-radius:5px !important; border:1px solid #555 !important; padding:0.5em !important;}
+.stButton>button { background-color:#2e7d32 !important; color:white !important; width:100% !important; height:3em !important; border-radius:5px !important; font-weight:bold !important;}
+.stAlert {background-color:#2a2a2a !important; color:#fff !important;}
+hr {border-color:#2e7d32; margin-top:0.5rem; margin-bottom:1rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -42,7 +35,7 @@ hr { border-color: #2e7d32; margin-top: 0.5rem; margin-bottom: 1rem; }
 # Project Title
 # -----------------------------
 st.markdown("""
-<h1 style="color:#2e7d32; margin-bottom: 0; font-weight: 900;">
+<h1 style="color:#2e7d32; margin-bottom:0; font-weight:900;">
 ♻️ Local Waste Recycling Incentive System
 </h1>
 <hr>
@@ -56,6 +49,18 @@ def generate_user_id(length=8):
 
 def generate_otp(length=4):
     return ''.join(random.choices(string.digits, k=length))
+
+def get_badge(points):
+    if points <= 10:
+        return "♻️ Newbie Recycler"
+    elif points <= 20:
+        return "🌱 Green Starter"
+    elif points <= 50:
+        return "🌿 Eco Warrior"
+    elif points <= 100:
+        return "🌳 Eco Hero"
+    else:
+        return "🏆 Recycling Master"
 
 # -----------------------------
 # Session State Init
@@ -92,8 +97,6 @@ if st.session_state['logged_in']:
 # User Portal
 # -----------------------------
 st.subheader("User Portal")
-
-# Login / Register
 if not st.session_state['logged_in']:
     tab1, tab2 = st.tabs(["Login", "Register"])
 
@@ -132,7 +135,6 @@ if not st.session_state['logged_in']:
                 st.session_state['otp_value'] = generate_otp()
                 st.session_state['otp_sent'] = True
                 st.success(f"OTP sent to {u_mobile} ✅ (Auto verified for demo)")
-
         if st.session_state['otp_sent']:
             st.info(f"OTP **{st.session_state['otp_value']}** auto-verified ✅")
             if u_mobile not in st.session_state['users_df']['mobile'].values:
@@ -153,34 +155,73 @@ else:
     if not assigned.empty:
         st.info(f"Your Collector Assigned: **{assigned.iloc[0]['name']}** 🚚 En route...")
 
-    # Waste Submission Form (All 5 types at once)
+    # -----------------------------
+    # Waste Submission Form
+    # -----------------------------
     with st.form("waste_form"):
         waste_types = ['Plastic','Paper','Organic','Metal','Glass']
         quantities = {}
+        improper_types = []
+        contaminated_types = []
         for w in waste_types:
             quantities[w] = st.number_input(f"{w} (kg)", min_value=0.0, step=0.1, key=w)
+
         submitted = st.form_submit_button("Submit All Waste")
         if submitted:
-            points_map = {'Plastic':2,'Paper':2,'Organic':2,'Metal':2,'Glass':2}  # realistic points
-            total_points = sum(points_map[w] for w in waste_types if quantities[w]>0)
+            points_map = {'Plastic':2,'Paper':2,'Organic':2,'Metal':2,'Glass':2}
+            daily_cap = 10
+            today = date.today()
+            # Points already earned today
+            df = st.session_state['submissions_df']
+            points_today = df[(df['user_id']==user['mobile']) & (pd.to_datetime(df['timestamp']).dt.date==today)]['points'].sum()
+            total_points_earned = 0
             timestamp = datetime.now()
+
+            # Simulate improper / contaminated for demo (optional)
             for w in waste_types:
-                if quantities[w]>0:
-                    category = "Wet" if w=="Organic" else "Dry"
-                    area_match = assigned.sort_values('total_points').iloc[0]
-                    c_id, c_name = area_match['collector_id'], area_match['name']
-                    idx = st.session_state['collectors_df'].loc[st.session_state['collectors_df']['collector_id']==c_id].index[0]
-                    st.session_state['collectors_df'].at[idx,'total_points'] += points_map[w]
+                if quantities[w] > 0:
+                    status = "Proper"
+                    # Simple rule: Organic in Plastic → Contaminated
+                    if w=="Plastic" and quantities.get("Organic",0)>0:
+                        status = "Contaminated"
+                        contaminated_types.append(w)
+                    elif w=="Organic" and quantities.get("Plastic",0)>0:
+                        status = "Improper"
+                        improper_types.append(w)
 
+                    base_points = points_map[w]
+                    # Apply daily cap
+                    remaining_points = max(0, daily_cap - points_today - total_points_earned)
+                    points_awarded = min(base_points, remaining_points)
+                    total_points_earned += points_awarded
+
+                    # Update collector & user points
+                    if not assigned.empty:
+                        c_id = assigned.iloc[0]['collector_id']
+                        idx = st.session_state['collectors_df'].loc[st.session_state['collectors_df']['collector_id']==c_id].index[0]
+                        st.session_state['collectors_df'].at[idx,'total_points'] += points_awarded
                     u_idx = st.session_state['users_df'].loc[st.session_state['users_df']['mobile']==user['mobile']].index[0]
-                    st.session_state['users_df'].at[u_idx,'total_points'] += points_map[w]
+                    st.session_state['users_df'].at[u_idx,'total_points'] += points_awarded
 
+                    # Deduct points for improper / contaminated
+                    if status=="Improper":
+                        st.session_state['users_df'].at[u_idx,'total_points'] = max(0, st.session_state['users_df'].at[u_idx,'total_points'] -2)
+                    if status=="Contaminated":
+                        st.session_state['users_df'].at[u_idx,'total_points'] = max(0, st.session_state['users_df'].at[u_idx,'total_points'] -3)
+
+                    # Record submission
                     new_sub = {'submission_id': len(st.session_state['submissions_df'])+1,
-                               'user_id': user['mobile'], 'collector_id': c_id, 'waste_type': w,
-                               'quantity': quantities[w], 'points': points_map[w], 'status':"Proper",
-                               'category': category, 'timestamp': timestamp, 'area': user['area']}
+                               'user_id': user['mobile'], 'collector_id': c_id if not assigned.empty else 0,
+                               'waste_type': w, 'quantity': quantities[w], 'points': points_awarded,
+                               'status':status, 'category': "Wet" if w=="Organic" else "Dry",
+                               'timestamp': timestamp, 'area': user['area']}
                     st.session_state['submissions_df'] = pd.concat([st.session_state['submissions_df'], pd.DataFrame([new_sub])], ignore_index=True)
-            st.success(f"Submitted 5 waste types! Total Points Earned: {total_points}")
+
+            # Show points earned + badge
+            u_idx = st.session_state['users_df'].loc[st.session_state['users_df']['mobile']==user['mobile']].index[0]
+            total_user_points = st.session_state['users_df'].at[u_idx,'total_points']
+            badge = get_badge(total_user_points)
+            st.success(f"Total Points Earned Today: {total_points_earned} ✅ Badge: {badge}")
             st.balloons()
             st.experimental_rerun()
 
@@ -190,68 +231,14 @@ else:
     st.markdown("---")
     st.header("📊 Recycling Dashboard")
     df = st.session_state['submissions_df']
-    collectors = st.session_state['collectors_df']
     users = st.session_state['users_df']
 
-    # Filters
-    st.sidebar.subheader("Filters")
-    area_filter = st.sidebar.multiselect("Select Area", options=df['area'].unique() if not df.empty else [], default=None)
-    day_filter = st.sidebar.date_input("Select Date", value=date.today())
+    # Leaderboard
+    if not users.empty:
+        st.subheader("Community Leaderboard")
+        top_users = users.sort_values('total_points', ascending=False).head(10)
+        st.table(top_users[['name','area','total_points']].reset_index(drop=True))
 
-    filtered_df = df.copy()
-    if area_filter:
-        filtered_df = filtered_df[filtered_df['area'].isin(area_filter)]
-    filtered_df = filtered_df[pd.to_datetime(filtered_df['timestamp']).dt.date == day_filter]
-
-    tabs = st.tabs(["Metrics","Collector Table","Area-wise Waste","Segregation Status","Daily Trends","Leaderboard"])
-
-    # 1️⃣ Metrics
-    with tabs[0]:
-        total_waste = filtered_df['quantity'].sum() if not filtered_df.empty else 0
-        total_points = filtered_df['points'].sum() if not filtered_df.empty else 0
-        total_submissions = len(filtered_df)
-        proper_count = filtered_df[filtered_df['status']=="Proper"].shape[0] if not filtered_df.empty else 0
-        improper_count = filtered_df[filtered_df['status']=="Improper"].shape[0] if not filtered_df.empty else 0
-        proper_pct = (proper_count/(proper_count+improper_count)*100) if (proper_count+improper_count)>0 else 0
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Waste (kg)", f"{total_waste:.2f}")
-        col2.metric("Total Points", f"{total_points}")
-        col3.metric("Submissions", f"{total_submissions}")
-        col4.metric("Proper Segregation %", f"{proper_pct:.1f}%")
-
-    # 2️⃣ Collector Table
-    with tabs[1]:
-        st.subheader("Collector Performance")
-        st.table(collectors[['name','assigned_area','total_points']].sort_values('total_points', ascending=False).reset_index(drop=True))
-
-    # 3️⃣ Area-wise Waste (Bar)
-    with tabs[2]:
-        if not filtered_df.empty:
-            area_waste = filtered_df.groupby('area')['quantity'].sum().reset_index()
-            fig_area = px.bar(area_waste, x='area', y='quantity', text='quantity', color='area', title="Waste Collected per Area")
-            fig_area.update_traces(texttemplate='%{text:.2f} kg', textposition='outside')
-            st.plotly_chart(fig_area, use_container_width=True)
-
-    # 4️⃣ Segregation Donut
-    with tabs[3]:
-        if not filtered_df.empty:
-            status_df = filtered_df['status'].value_counts().reset_index()
-            status_df.columns=['status','count']
-            fig_status = go.Figure(data=[go.Pie(labels=status_df['status'], values=status_df['count'], hole=0.5)])
-            fig_status.update_traces(marker=dict(colors=['#27ae60','#c0392b']), textinfo='label+percent')
-            st.plotly_chart(fig_status, use_container_width=True)
-
-    # 5️⃣ Daily Trends (Line)
-    with tabs[4]:
-        if not filtered_df.empty:
-            filtered_df['date'] = pd.to_datetime(filtered_df['timestamp']).dt.date
-            line_df = filtered_df.groupby(['date','area'])['quantity'].sum().reset_index()
-            fig_trends = px.line(line_df, x='date', y='quantity', color='area', markers=True, title="Daily Collection Trends")
-            st.plotly_chart(fig_trends, use_container_width=True)
-
-    # 6️⃣ Leaderboard
-    with tabs[5]:
-        if not users.empty:
-            st.subheader("Community Leaderboard")
-            top_users = users.sort_values('total_points', ascending=False).head(10)
-            st.table(top_users[['name','area','total_points']].reset_index(drop=True))
+    # Show User Badge
+    st.subheader("🏅 Your Badge")
+    st.markdown(f"<h2 style='color:#2e7d32;'>{badge}</h2>", unsafe_allow_html=True)
