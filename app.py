@@ -194,7 +194,7 @@ else:
                 st.experimental_rerun()
 
     # -----------------------------
-    # Dashboard & Leaderboard (4 Charts)
+    # Dashboard & Leaderboard (Charts)
     # -----------------------------
     elif page=="Dashboard & Leaderboard":
         st.header("📊 Recycling Dashboard")
@@ -209,21 +209,18 @@ else:
             st.subheader("Waste Type Distribution (%)")
             st.plotly_chart(fig_waste, use_container_width=True)
 
-        # 2️⃣ Daily Waste by Area → Stacked Area Chart
+        # 2️⃣ Total Waste by Area (Pie Chart)
         if not df.empty:
-            df['date'] = pd.to_datetime(df['timestamp']).dt.date
-            daily_area_trend = df.groupby(['date','area'])['quantity'].sum().reset_index()
-
-            fig_area = px.area(
-                daily_area_trend,
-                x='date',
-                y='quantity',
-                color='area',
-                title="Daily Waste Collection by Area (Stacked Area Chart)",
-                labels={'quantity':'Quantity (kg)', 'date':'Date'}
-            )
-            st.subheader("📈 Daily Waste Collection by Area (Stacked Area Chart)")
-            st.plotly_chart(fig_area, use_container_width=True)
+            total_area_df = df.groupby('area')['quantity'].sum().reset_index()
+            fig_area_pie = go.Figure(data=[go.Pie(
+                labels=total_area_df['area'],
+                values=total_area_df['quantity'],
+                hole=0.4,
+                textinfo='label+value',
+                title="Total Waste Collected by Area (kg)"
+            )])
+            st.subheader("🟢 Total Waste Collected by Area (kg)")
+            st.plotly_chart(fig_area_pie, use_container_width=True)
 
         # 3️⃣ Segregation Status (Bubble Chart)
         if not df.empty:
