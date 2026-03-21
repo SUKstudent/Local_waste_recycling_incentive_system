@@ -209,26 +209,22 @@ else:
             st.subheader("Waste Type Distribution (%)")
             st.plotly_chart(fig_waste, use_container_width=True)
 
-        # 2️⃣ Daily Waste by Area → Replaced with Line Chart
+        # 2️⃣ Daily Waste by Area → Animated Bar Chart
         if not df.empty:
             df['date'] = pd.to_datetime(df['timestamp']).dt.date
             daily_area_trend = df.groupby(['date','area'])['quantity'].sum().reset_index()
-            
-            fig_daily_area_line = px.line(
+
+            fig_anim = px.bar(
                 daily_area_trend,
-                x='date',
+                x='area',
                 y='quantity',
                 color='area',
-                markers=True,
-                title="Daily Waste Collection by Area (Trend)"
+                animation_frame=daily_area_trend['date'].astype(str),
+                title="Daily Waste Collection by Area (Animated)",
+                labels={'quantity':'Quantity (kg)','area':'Area'}
             )
-            fig_daily_area_line.update_layout(
-                xaxis_title="Date",
-                yaxis_title="Quantity (kg)"
-            )
-            
-            st.subheader("📈 Daily Waste Collection by Area (Trend)")
-            st.plotly_chart(fig_daily_area_line, use_container_width=True)
+            st.subheader("🎬 Daily Waste Collection by Area (Animated)")
+            st.plotly_chart(fig_anim, use_container_width=True)
 
         # 3️⃣ Segregation Status (Bubble Chart)
         if not df.empty:
