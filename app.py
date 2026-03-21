@@ -9,11 +9,32 @@ from datetime import datetime, date
 # Page Config & Styling
 # -----------------------------
 st.set_page_config(page_title="Recycle Rewards", layout="wide")
+
+# Global CSS to fix input and button styling for readability
 st.markdown("""
 <style>
-.main { background-color: #f9fbf9; }
-.stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #2e7d32; color: white; }
-.stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+input, textarea {
+    background-color: white !important;
+    color: black !important;
+    border-radius: 5px !important;
+    padding: 0.5em !important;
+}
+.stButton>button {
+    width: 100%;
+    border-radius: 5px;
+    height: 3em;
+    background-color: #2e7d32;
+    color: white;
+}
+.main {
+    background-color: #f9fbf9;
+}
+.stMetric {
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -92,7 +113,7 @@ if role == "User":
 
         # LOGIN
         with tab1:
-            login_mobile = st.text_input("Enter Mobile Number")
+            login_mobile = st.text_input("Enter Mobile Number", placeholder="e.g. 9876543210")
             if st.button("Login"):
                 users = st.session_state['users_df']
                 if not users.empty:
@@ -191,8 +212,8 @@ if role == "User":
 elif role=="Admin":
     st.title("🏛️ Municipal Admin Dashboard")
     st.subheader("Login with admin credentials")
-    admin_user = st.text_input("Username")
-    admin_pass = st.text_input("Password", type="password")
+    admin_user = st.text_input("Username", placeholder="admin")
+    admin_pass = st.text_input("Password", type="password", placeholder="admin123")
     if st.button("Admin Login"):
         if admin_user=="admin" and admin_pass=="admin123":
             st.success("Admin login successful!")
