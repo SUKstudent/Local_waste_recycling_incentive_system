@@ -198,6 +198,7 @@ else:
         st.header("📊 Recycling Dashboard")
         df = st.session_state['submissions_df']
         users = st.session_state['users_df']
+        collectors = st.session_state['collectors_df']
 
         # 1️⃣ Donut: Waste Type %
         if not df.empty:
@@ -227,11 +228,30 @@ else:
             st.subheader("Daily Waste Collection Trend")
             st.plotly_chart(fig_line,use_container_width=True)
 
-        # 4️⃣ Current User Points & Badge
+        # 4️⃣ Collector Performance Bar Chart
+        if not collectors.empty:
+            fig_col = px.bar(collectors, x='name', y='total_points',
+                             color='assigned_area', title="Collector Performance (Total Points)",
+                             text='total_points')
+            fig_col.update_traces(texttemplate='%{text}', textposition='outside')
+            st.subheader("Collector Performance")
+            st.plotly_chart(fig_col, use_container_width=True)
+
+        # 5️⃣ Segregation Status Donut
+        if not df.empty:
+            status_df = df['status'].value_counts().reset_index()
+            status_df.columns = ['status','count']
+            fig_status = go.Figure(data=[go.Pie(labels=status_df['status'], values=status_df['count'], hole=0.5)])
+            fig_status.update_traces(marker=dict(colors=['#27ae60','#f39c12','#c0392b']),
+                                     textinfo='label+percent')
+            st.subheader("Segregation Status")
+            st.plotly_chart(fig_status,use_container_width=True)
+
+        # 6️⃣ Current User Points & Badge
         st.subheader("🏅 Your Points & Badge")
-        u_idx = st.session_state['users_df'].loc[st.session_state['users_df']['mobile']==user['mobile']].index[0]
-        user_points = st.session_state['users_df'].at[u_idx,'total_points']
-        user_badge = st.session_state['users_df'].at[u_idx,'badge']
+        u_idx = users.loc[users['mobile']==user['mobile']].index[0]
+        user_points = users.at[u_idx,'total_points']
+        user_badge = users.at[u_idx,'badge']
         st.markdown(f"""
 **Name:** {user['name']}  
 **Area:** {user['area']}  
