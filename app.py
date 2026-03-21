@@ -33,6 +33,13 @@ if 'submissions_df' not in st.session_state:
 st.session_state.setdefault('logged_in', False)
 st.session_state.setdefault('current_user', {})
 
+# ----------------- Logout -----------------
+if st.session_state['logged_in']:
+    if st.sidebar.button("Logout"):
+        st.session_state['logged_in'] = False
+        st.session_state['current_user'] = {}
+        st.experimental_rerun()
+
 # ----------------- Login/Register -----------------
 if not st.session_state['logged_in']:
     tab1, tab2 = st.tabs(["Login","Register"])
@@ -54,9 +61,12 @@ if not st.session_state['logged_in']:
         mobile = st.text_input("Mobile Number")
         area = st.selectbox("Area", ["Residential Apartment Complex","Hospital","Shopping Mall","Office Complex","Market","Industrial Area"])
         if st.button("Register"):
-            new_user = {'user_id':generate_user_id(),'name':name,'mobile':mobile,'area':area,'total_points':0}
-            st.session_state['users_df'] = pd.concat([st.session_state['users_df'], pd.DataFrame([new_user])], ignore_index=True)
-            st.success("Registered successfully! Please login.")
+            if not name or not mobile or area == "--Select--":
+                st.error("Fill all details")
+            else:
+                new_user = {'user_id':generate_user_id(),'name':name,'mobile':mobile,'area':area,'total_points':0}
+                st.session_state['users_df'] = pd.concat([st.session_state['users_df'], pd.DataFrame([new_user])], ignore_index=True)
+                st.success("Registered successfully! Please login.")
 
 # ----------------- Logged In Portal -----------------
 else:
@@ -103,7 +113,6 @@ else:
                     'area': user['area']
                 }
                 st.session_state['submissions_df'] = pd.concat([st.session_state['submissions_df'], pd.DataFrame([new_sub])], ignore_index=True)
-                # Update user points
                 idx = st.session_state['users_df'][st.session_state['users_df']['mobile']==user['mobile']].index[0]
                 st.session_state['users_df'].at[idx, 'total_points'] += points
             st.success(f"Submitted {len(submitted_wastes)} waste types successfully! Points updated.")
