@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # -----------------------------
-# Sidebar
+# Sidebar Logo & Description
 # -----------------------------
 st.sidebar.image("GreenBin.jpg", width=150)
 st.sidebar.markdown("""
@@ -26,7 +26,7 @@ Register or login to start contributing!
 """)
 
 # -----------------------------
-# Dark Theme
+# Dark Theme CSS
 # -----------------------------
 st.markdown("""
 <style>
@@ -51,7 +51,7 @@ def generate_otp(length=4):
     return ''.join(random.choices(string.digits, k=length))
 
 # -----------------------------
-# Session State
+# Session State Initialization
 # -----------------------------
 if 'users_df' not in st.session_state:
     st.session_state['users_df'] = pd.DataFrame(columns=['user_id','name','mobile','area','total_points'])
@@ -74,13 +74,14 @@ st.session_state.setdefault('logged_in', False)
 st.session_state.setdefault('current_user', {})
 
 # -----------------------------
-# Login/Register (same as yours)
+# User Portal: Login/Register
 # -----------------------------
 st.subheader("User Portal")
 
 if not st.session_state['logged_in']:
     tab1, tab2 = st.tabs(["Login", "Register"])
 
+    # ----- LOGIN -----
     with tab1:
         login_mobile = st.text_input("Mobile Number")
         if st.button("Login"):
@@ -95,9 +96,10 @@ if not st.session_state['logged_in']:
             else:
                 st.error("User not found")
 
+    # ----- REGISTER -----
     with tab2:
-        name = st.text_input("Name")
-        mobile = st.text_input("Mobile")
+        name = st.text_input("Full Name")
+        mobile = st.text_input("Mobile Number")
         area = st.selectbox("Area", ["Residential Apartment Complex","Hospital","Shopping Mall","Office Complex","Market","Industrial Area"])
 
         if st.button("Register"):
@@ -108,32 +110,30 @@ if not st.session_state['logged_in']:
                 'area': area,
                 'total_points': 0
             }
-            st.session_state['users_df'] = pd.concat([st.session_state['users_df'], pd.DataFrame([new_user])])
-            st.success("Registered!")
+            st.session_state['users_df'] = pd.concat([st.session_state['users_df'], pd.DataFrame([new_user])], ignore_index=True)
+            st.success("Registered! You can now login.")
 
 # -----------------------------
-# Logged In
+# Logged In Portal
 # -----------------------------
 else:
     user = st.session_state['current_user']
     st.success(f"Welcome {user['name']} ({user['area']})")
 
-    # -----------------------------
-    # Waste Submission (UPDATED)
-    # -----------------------------
+    # ----- Waste Submission -----
     with st.form("waste_form"):
 
         w_type = st.selectbox("Waste Type", [
             'Plastic', 'Paper', 'Organic', 'Metal', 'Glass', 'Hazardous'
         ])
 
-        w_qty = st.number_input("Quantity (kg)", min_value=0.1)
+        w_qty = st.number_input("Quantity (kg)", min_value=0.1, step=0.1)
 
         submit = st.form_submit_button("Submit")
 
         if submit:
 
-            # 🚨 Restrict hazardous waste
+            # Restrict hazardous waste
             if w_type == "Hazardous" and user['area'] not in ["Hospital", "Industrial Area"]:
                 st.error("⚠️ Hazardous waste allowed only for Hospital or Industrial Area")
                 st.stop()
@@ -146,7 +146,7 @@ else:
             else:
                 category = "Dry"
 
-            # Points system (improved)
+            # Points system with area multiplier
             points_map = {
                 'Plastic': 8,
                 'Paper': 6,
@@ -156,13 +156,11 @@ else:
                 'Hazardous': 20
             }
 
-            # Area multiplier (smart feature)
+            multiplier = 1.0
             if user['area'] == "Hospital":
                 multiplier = 1.2
             elif user['area'] == "Industrial Area":
                 multiplier = 1.3
-            else:
-                multiplier = 1.0
 
             points = w_qty * points_map[w_type] * multiplier
 
@@ -186,43 +184,67 @@ else:
             }
 
             st.session_state['submissions_df'] = pd.concat(
-                [st.session_state['submissions_df'], pd.DataFrame([new_sub])]
+                [st.session_state['submissions_df'], pd.DataFrame([new_sub])], ignore_index=True
             )
 
-            # Update points
+            # Update user points
             idx = st.session_state['users_df'].loc[
                 st.session_state['users_df']['mobile'] == user['mobile']
             ].index[0]
-
             st.session_state['users_df'].at[idx, 'total_points'] += points
 
             st.success(f"✅ Submitted! Points earned: {points:.2f}")
 
     # -----------------------------
-    # Dashboard (same + extra chart)
+    # Dashboard
     # -----------------------------
     st.header("📊 Dashboard")
     df = st.session_state['submissions_df']
 
+    # ----- Sidebar Single-Date Filter -----
+    st.sidebar.subheader("📌 Filter by Date & Area")
+
     if not df.empty:
+        area_filter = st.sidebar.multiselect(
+            "Select Area",
+            options=df['area'].unique(),
+            default=df['area'].unique()
+        )
 
-        # Waste Distribution Chart (NEW)
+        selected_date = st.sidebar.date_input(
+            "Select Date",
+            value=pd.to_datetime(df['timestamp']).max().date()
+        )
+
+        filtered_df = df[
+            (df['area'].isin(area_filter)) &
+            (pd.to_datetime(df['timestamp']).dt.date == selected_date)
+        ]
+    else:
+        filtered_df = df
+
+    # ----- Waste Distribution Pie Chart -----
+    if not filtered_df.empty:
         st.subheader("Waste Distribution")
-        waste_dist = df.groupby('waste_type')['quantity'].sum().reset_index()
-
-        fig = px.pie(
+        waste_dist = filtered_df.groupby('waste_type')['quantity'].sum().reset_index()
+        fig1 = px.pie(
             waste_dist,
             names='waste_type',
             values='quantity',
             title="Waste Composition"
         )
+        fig1.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
+        st.plotly_chart(fig1, use_container_width=True)
 
-        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Area chart
-        area_df = df.groupby('area')['quantity'].sum().reset_index()
-
-        fig2 = px.bar(area_df, x='area', y='quantity', color='area')
+        # ----- Area-wise Bar Chart -----
+        st.subheader("Area-wise Waste Collection")
+        area_df = filtered_df.groupby('area')['quantity'].sum().reset_index()
+        fig2 = px.bar(
+            area_df,
+            x='area',
+            y='quantity',
+            color='area',
+            labels={'quantity':'Total Waste (kg)', 'area':'Area'}
+        )
         fig2.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
         st.plotly_chart(fig2, use_container_width=True)
