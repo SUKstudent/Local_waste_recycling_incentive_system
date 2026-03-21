@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import random
 import string
-from datetime import datetime, date
+from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -74,7 +74,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# Helper functions
+# Helper Functions
 # -----------------------------
 def generate_user_id(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -121,6 +121,7 @@ st.subheader("User Portal")
 if not st.session_state['logged_in']:
     tab1, tab2 = st.tabs(["Login", "Register"])
 
+    # LOGIN
     with tab1:
         login_mobile = st.text_input("Mobile Number", placeholder="e.g. 9876543210")
         if st.button("Login"):
@@ -142,6 +143,7 @@ if not st.session_state['logged_in']:
             else:
                 st.error("No users registered yet. Please register first.")
 
+    # REGISTER
     with tab2:
         col1, col2 = st.columns(2)
         with col1:
@@ -175,23 +177,20 @@ else:
     user = st.session_state['current_user']
     st.success(f"Logged in as: {user['name']} | Area: {user['area']}")
 
-    # -----------------------------
-    # Waste Submission Form
-    # -----------------------------
     assigned = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area'] == user['area']]
     if not assigned.empty:
         st.info(f"Your Collector Assigned: **{assigned.iloc[0]['name']}** 🚚 En route...")
 
+    # Waste Submission
     with st.form("waste_form"):
         w_type = st.selectbox("Waste Type", ['Plastic', 'Paper', 'Organic', 'Metal', 'Glass'])
         w_qty = st.number_input("Quantity (kg)", min_value=0.1, step=0.1)
         submitted = st.form_submit_button("Submit")
         if submitted:
             points_map = {'Plastic': 10, 'Paper': 5, 'Organic': 2, 'Metal': 12, 'Glass': 8}
-            category = "Wet" if w_type == "Organic" else "Dry"
+            category = "Wet" if w_type=="Organic" else "Dry"
             earned = w_qty * points_map[w_type]
 
-            # Assign collector
             area_match = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area'] == user['area']]
             if not area_match.empty:
                 selected = area_match.sort_values('total_points').iloc[0]
@@ -201,12 +200,10 @@ else:
             else:
                 c_id, c_name = None, "Unassigned"
 
-            # Update user points
-            u_idx = st.session_state['users_df'][st.session_state['users_df']['mobile'] == user['mobile']].index[0]
+            u_idx = st.session_state['users_df'].loc[st.session_state['users_df']['mobile'] == user['mobile']].index[0]
             st.session_state['users_df'].at[u_idx, 'total_points'] += earned
 
-            # Log submission
-            new_sub = {'submission_id': len(st.session_state['submissions_df']) + 1,
+            new_sub = {'submission_id': len(st.session_state['submissions_df'])+1,
                        'user_id': user['mobile'], 'collector_id': c_id, 'waste_type': w_type,
                        'quantity': w_qty, 'points': earned, 'status': "Proper",
                        'category': category, 'timestamp': datetime.now(), 'area': user['area']}
@@ -217,57 +214,75 @@ else:
             st.experimental_rerun()
 
     # -----------------------------
-    # Enhanced Dashboard
+    # Multi-tab Dashboard with Filters
     # -----------------------------
     st.markdown("---")
     st.header("📊 Recycling Dashboard")
-
     df = st.session_state['submissions_df']
     collectors = st.session_state['collectors_df']
     users = st.session_state['users_df']
 
-    # Metrics
-    total_waste = df['quantity'].sum() if not df.empty else 0
-    total_points = df['points'].sum() if not df.empty else 0
-    total_submissions = len(df)
-    proper_count = df[df['status']=="Proper"].shape[0] if not df.empty else 0
-    improper_count = df[df['status']=="Improper"].shape[0] if not df.empty else 0
-    proper_pct = (proper_count/(proper_count+improper_count)*100) if (proper_count+improper_count)>0 else 0
+    # Filter sidebar for charts
+    st.sidebar.subheader("Filters")
+    area_filter = st.sidebar.multiselect("Select Area", options=df['area'].unique() if not df.empty else [], default=None)
+    start_date = st.sidebar.date_input("Start Date", min(df['timestamp']).date() if not df.empty else datetime.today())
+    end_date = st.sidebar.date_input("End Date", max(df['timestamp']).date() if not df.empty else datetime.today())
+    
+    filtered_df = df.copy()
+    if area_filter:
+        filtered_df = filtered_df[filtered_df['area'].isin(area_filter)]
+    filtered_df = filtered_df[(pd.to_datetime(filtered_df['timestamp']).dt.date >= start_date) & 
+                              (pd.to_datetime(filtered_df['timestamp']).dt.date <= end_date)]
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Waste (kg)", f"{total_waste:.2f}")
-    col2.metric("Total Points", f"{total_points:.0f}")
-    col3.metric("Submissions", f"{total_submissions}")
-    col4.metric("Proper Segregation %", f"{proper_pct:.1f}%")
+    tabs = st.tabs(["Metrics","Collector Table","Area-wise Waste","Segregation Status","Daily Trends","Leaderboard"])
 
-    # Collector performance table
-    st.subheader("Collector Performance")
-    st.table(collectors[['name','assigned_area','total_points']].sort_values('total_points', ascending=False).reset_index(drop=True))
+    # 1️⃣ Metrics
+    with tabs[0]:
+        total_waste = filtered_df['quantity'].sum() if not filtered_df.empty else 0
+        total_points = filtered_df['points'].sum() if not filtered_df.empty else 0
+        total_submissions = len(filtered_df)
+        proper_count = filtered_df[filtered_df['status']=="Proper"].shape[0] if not filtered_df.empty else 0
+        improper_count = filtered_df[filtered_df['status']=="Improper"].shape[0] if not filtered_df.empty else 0
+        proper_pct = (proper_count/(proper_count+improper_count)*100) if (proper_count+improper_count)>0 else 0
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Waste (kg)", f"{total_waste:.2f}")
+        col2.metric("Total Points", f"{total_points:.0f}")
+        col3.metric("Submissions", f"{total_submissions}")
+        col4.metric("Proper Segregation %", f"{proper_pct:.1f}%")
 
-    # Area-wise waste bar chart
-    if not df.empty:
-        area_waste = df.groupby('area')['quantity'].sum().reset_index()
-        fig_area = px.bar(area_waste, x='area', y='quantity', color='area', title="Waste Collected per Area", labels={'quantity':'Total Waste (kg)'})
-        st.plotly_chart(fig_area, use_container_width=True)
+    # 2️⃣ Collector Table
+    with tabs[1]:
+        st.subheader("Collector Performance")
+        st.table(collectors[['name','assigned_area','total_points']].sort_values('total_points', ascending=False).reset_index(drop=True))
 
-    # Segregation status donut chart
-    if not df.empty:
-        status_df = df['status'].value_counts().reset_index()
-        status_df.columns = ['status','count']
-        fig_status = go.Figure(data=[go.Pie(labels=status_df['status'], values=status_df['count'], hole=0.5)])
-        fig_status.update_traces(marker=dict(colors=['#27ae60','#c0392b']))
-        fig_status.update_layout(title="Segregation Status")
-        st.plotly_chart(fig_status, use_container_width=True)
+    # 3️⃣ Area-wise Waste
+    with tabs[2]:
+        if not filtered_df.empty:
+            area_waste = filtered_df.groupby('area')['quantity'].sum().reset_index()
+            fig_area = px.bar(area_waste, x='area', y='quantity', color='area', title="Waste Collected per Area", labels={'quantity':'Total Waste (kg)'})
+            st.plotly_chart(fig_area, use_container_width=True)
 
-    # Daily trends line chart
-    if not df.empty:
-        df['date'] = pd.to_datetime(df['timestamp']).dt.date
-        line_df = df.groupby(['date','area'])['quantity'].sum().reset_index()
-        fig_trends = px.line(line_df, x='date', y='quantity', color='area', markers=True, title="Daily Collection Trends", labels={'quantity':'Total Waste (kg)'})
-        st.plotly_chart(fig_trends, use_container_width=True)
+    # 4️⃣ Segregation Donut
+    with tabs[3]:
+        if not filtered_df.empty:
+            status_df = filtered_df['status'].value_counts().reset_index()
+            status_df.columns=['status','count']
+            fig_status = go.Figure(data=[go.Pie(labels=status_df['status'], values=status_df['count'], hole=0.5)])
+            fig_status.update_traces(marker=dict(colors=['#27ae60','#c0392b']))
+            fig_status.update_layout(title="Segregation Status")
+            st.plotly_chart(fig_status, use_container_width=True)
 
-    # Community leaderboard
-    if not users.empty:
-        st.subheader("Community Leaderboard")
-        top_users = users.sort_values('total_points', ascending=False).head(10)
-        st.table(top_users[['name','area','total_points']].reset_index(drop=True))
+    # 5️⃣ Daily Trends
+    with tabs[4]:
+        if not filtered_df.empty:
+            filtered_df['date'] = pd.to_datetime(filtered_df['timestamp']).dt.date
+            line_df = filtered_df.groupby(['date','area'])['quantity'].sum().reset_index()
+            fig_trends = px.line(line_df, x='date', y='quantity', color='area', markers=True, title="Daily Collection Trends", labels={'quantity':'Total Waste (kg)'})
+            st.plotly_chart(fig_trends, use_container_width=True)
+
+    # 6️⃣ Leaderboard
+    with tabs[5]:
+        if not users.empty:
+            st.subheader("Community Leaderboard")
+            top_users = users.sort_values('total_points', ascending=False).head(10)
+            st.table(top_users[['name','area','total_points']].reset_index(drop=True))
