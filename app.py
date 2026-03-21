@@ -211,7 +211,7 @@ else:
 
         # 2️⃣ Total Waste by Area (KPI Cards)
         if not df.empty:
-            st.subheader("🟢 Total Waste Collected by Area (kg) - KPI View")
+            st.subheader("🟢 Total Waste Collected by Area (kg)")
             total_area_df = df.groupby('area')['quantity'].sum().reset_index()
             cols = st.columns(len(total_area_df))
             for col, (_, row) in zip(cols, total_area_df.iterrows()):
