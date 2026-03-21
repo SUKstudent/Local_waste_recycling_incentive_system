@@ -3,73 +3,86 @@ import pandas as pd
 import random
 import string
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 # -----------------------------
-# 1. Page Config & Styling
+# Page Config & Styling
 # -----------------------------
-st.set_page_config(page_title="Recycle Rewards - Local Waste and Recycling Incentive System", layout="wide")
-
+st.set_page_config(page_title="Recycle Rewards - Daily Updates", layout="wide")
 st.markdown("""
-    <style>
-    .main { background-color: #f9fbf9; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #2e7d32; color: white; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
+<style>
+.main { background-color: #f9fbf9; }
+.stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #2e7d32; color: white; }
+.stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
-# 2. Helper Functions & Data Initialization
+# Helper Functions
 # -----------------------------
 def generate_user_id(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-# Initialize DataFrames in Session State
+def generate_otp(length=4):
+    return ''.join(random.choices(string.digits, k=length))
+
+def update_daily_points():
+    """Update total_points daily for all users based on today's submissions"""
+    df_sub = st.session_state['submissions_df']
+    users = st.session_state['users_df']
+    today = date.today()
+    recent_subs = df_sub[pd.to_datetime(df_sub['timestamp']).dt.date==today]
+    if recent_subs.empty:
+        return
+    for _, row in recent_subs.iterrows():
+        u_idx = users[users['mobile']==row['user_id']].index[0]
+        st.session_state['users_df'].at[u_idx,'total_points'] = users.at[u_idx,'total_points'] + row['points']
+    st.session_state['last_points_update'] = today
+
+# -----------------------------
+# Initialize Session State
+# -----------------------------
 if 'users_df' not in st.session_state:
     st.session_state['users_df'] = pd.DataFrame(columns=['user_id','name','mobile','area','total_points','improper_count'])
-
 if 'collectors_df' not in st.session_state:
-    data = [
-        {'collector_id': 101, 'name': 'Officer Rajesh', 'assigned_area': 'Market', 'total_points': 0},
-        {'collector_id': 102, 'name': 'Officer Anita', 'assigned_area': 'Residential Apartment Complex', 'total_points': 0},
-        {'collector_id': 103, 'name': 'Officer Sam', 'assigned_area': 'Hospital', 'total_points': 0},
-        {'collector_id': 104, 'name': 'Officer Priya', 'assigned_area': 'Office Complex', 'total_points': 0},
-        {'collector_id': 105, 'name': 'Officer Vikram', 'assigned_area': 'Industrial Area', 'total_points': 0}
-    ]
-    st.session_state['collectors_df'] = pd.DataFrame(data)
-
+    st.session_state['collectors_df'] = pd.DataFrame([
+        {'collector_id':101,'name':'Officer Rajesh','assigned_area':'Market','total_points':0},
+        {'collector_id':102,'name':'Officer Anita','assigned_area':'Residential Apartment Complex','total_points':0},
+        {'collector_id':103,'name':'Officer Sam','assigned_area':'Hospital','total_points':0},
+        {'collector_id':104,'name':'Officer Priya','assigned_area':'Office Complex','total_points':0},
+        {'collector_id':105,'name':'Officer Vikram','assigned_area':'Industrial Area','total_points':0}
+    ])
 if 'submissions_df' not in st.session_state:
     st.session_state['submissions_df'] = pd.DataFrame(columns=[
         'submission_id','user_id','collector_id','waste_type','quantity','points','status','category','timestamp','area'
     ])
+if 'otp_sent' not in st.session_state: st.session_state['otp_sent'] = False
+if 'otp_value' not in st.session_state: st.session_state['otp_value'] = ''
+if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
+if 'current_user' not in st.session_state: st.session_state['current_user'] = {}
+if 'last_points_update' not in st.session_state: st.session_state['last_points_update'] = None
 
 # -----------------------------
-# 3. Sidebar Navigation
+# Role Selection
 # -----------------------------
-st.sidebar.title("🌿 Recycle Rewards System")
-page = st.sidebar.radio("Navigation", ["Login & Submit Waste", "User Dashboard", "Leaderboard"])
+role = st.sidebar.selectbox("Login as", ["User", "Admin"])
 
 # -----------------------------
-# 4. PAGE: Login & Waste Submission
+# USER / CITIZEN FLOW
 # -----------------------------
-if page == "Login & Submit Waste":
-    st.title("♻️ Recycle Rewards - Local Waste and Recycling Incentive System")
-
-    if 'logged_in' not in st.session_state:
-        st.session_state['logged_in'] = False
+if role == "User":
+    st.title("♻️ Recycle Rewards - User Portal")
 
     if not st.session_state['logged_in']:
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
 
-        # ---------------- LOGIN ----------------
+        # --- LOGIN ---
         with tab1:
-            st.subheader("Login")
             login_mobile = st.text_input("Enter Mobile Number", key="login_mobile")
-
             if st.button("Login"):
                 users = st.session_state['users_df']
                 if login_mobile in users['mobile'].values:
-                    user_data = users[users['mobile'] == login_mobile].iloc[0]
+                    user_data = users[users['mobile']==login_mobile].iloc[0]
                     st.session_state['logged_in'] = True
                     st.session_state['current_user'] = {
                         'name': user_data['name'],
@@ -77,185 +90,142 @@ if page == "Login & Submit Waste":
                         'area': user_data['area']
                     }
                     st.success("Login successful!")
-
-                    # Display assigned collector
-                    collectors = st.session_state['collectors_df']
-                    assigned = collectors[collectors['assigned_area'] == user_data['area']]
-                    if not assigned.empty:
-                        collector_name = assigned.iloc[0]['name']
-                        st.info(f"Your Collector Assigned: **{collector_name}**")
-
                     st.experimental_rerun()
                 else:
                     st.error("User not found. Please register first.")
 
-        # ---------------- REGISTER ----------------
+        # --- REGISTER ---
         with tab2:
-            st.subheader("Register New User")
             col1, col2 = st.columns(2)
-
             with col1:
                 u_name = st.text_input("Full Name", key="reg_name")
                 u_mobile = st.text_input("Mobile Number", key="reg_mobile")
-
             with col2:
                 u_area = st.selectbox("Your Location Area", [
-                    "--Select area--",
-                    'Residential Apartment Complex','Hospital','Shopping Mall',
-                    'Office Complex','Market','Industrial Area'
-                ], key="reg_area")
+                    "--Select area--",'Residential Apartment Complex','Hospital','Shopping Mall',
+                    'Office Complex','Market','Industrial Area'], key="reg_area")
 
-            # Show assigned collector if area selected
+            # Show collector if selected
             if u_area != "--Select area--":
-                collectors = st.session_state['collectors_df']
-                assigned = collectors[collectors['assigned_area'] == u_area]
+                assigned = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area']==u_area]
                 if not assigned.empty:
-                    collector_name = assigned.iloc[0]['name']
-                    st.info(f"Your Collector Assigned: **{collector_name}**")
+                    st.info(f"Your Collector Assigned: **{assigned.iloc[0]['name']}**")
 
-            if st.button("Register"):
-                users = st.session_state['users_df']
-
-                if not u_name or not u_mobile or u_area == "--Select area--":
-                    st.error("Please fill all details properly.")
-                elif u_mobile in users['mobile'].values:
-                    st.warning("User already exists. Please login.")
+            # Auto OTP
+            if st.button("Send OTP"):
+                if not u_name or not u_mobile or u_area=="--Select area--":
+                    st.error("Fill all details before sending OTP")
                 else:
-                    new_user = {
-                        'user_id': generate_user_id(),
-                        'name': u_name,
-                        'mobile': u_mobile,
-                        'area': u_area,
-                        'total_points': 0,
-                        'improper_count': 0
-                    }
-                    st.session_state['users_df'] = pd.concat(
-                        [users, pd.DataFrame([new_user])],
-                        ignore_index=True
-                    )
-                    st.success("Registration successful! Please login.")
+                    st.session_state['otp_value'] = generate_otp()
+                    st.session_state['otp_sent'] = True
+                    st.success(f"OTP sent to {u_mobile} ✅ (Auto verified for demo)")
+
+            if st.session_state['otp_sent']:
+                st.info(f"OTP **{st.session_state['otp_value']}** auto-verified ✅")
+                st.success("Registration successful! You can now login.")
+                # Save user
+                if u_mobile not in st.session_state['users_df']['mobile'].values:
+                    new_user = {'user_id': generate_user_id(),'name': u_name,'mobile': u_mobile,
+                                'area': u_area,'total_points':0,'improper_count':0}
+                    st.session_state['users_df'] = pd.concat([st.session_state['users_df'], pd.DataFrame([new_user])], ignore_index=True)
+                st.session_state['otp_sent'] = False
 
     else:
+        # --- AFTER LOGIN ---
         user = st.session_state['current_user']
         st.success(f"Logged in as: **{user['name']}** | Area: **{user['area']}**")
-
         # Show assigned collector
-        collectors = st.session_state['collectors_df']
-        assigned = collectors[collectors['assigned_area'] == user['area']]
-        if not assigned.empty:
-            collector_name = assigned.iloc[0]['name']
-            st.info(f"Your Collector Assigned: **{collector_name}**")
+        assigned = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area']==user['area']]
+        if not assigned.empty: st.info(f"Your Collector Assigned: **{assigned.iloc[0]['name']}**")
 
-        # ----------------- Submission Form -----------------
+        # Waste Submission
         with st.form("waste_form"):
-            st.subheader("Log New Disposal")
-            w_type = st.selectbox("Waste Type", ['Plastic', 'Paper', 'Organic', 'Metal', 'Glass'])
+            w_type = st.selectbox("Waste Type", ['Plastic','Paper','Organic','Metal','Glass'])
             w_qty = st.number_input("Quantity (kg)", min_value=0.1, step=0.1)
-            is_segregated = st.radio("Is it properly segregated?", ["Yes", "No"])
-            submitted = st.form_submit_button("Submit to Collector")
-
+            is_segregated = st.radio("Is it properly segregated?", ["Yes","No"])
+            submitted = st.form_submit_button("Submit")
             if submitted:
-                # Point calculation
-                points_map = {'Plastic': 10, 'Paper': 5, 'Organic': 2, 'Metal': 12, 'Glass': 8}
-                category = "Wet" if w_type == 'Organic' else "Dry"
-                earned = (w_qty * points_map[w_type]) if is_segregated == "Yes" else 0
+                points_map = {'Plastic':10,'Paper':5,'Organic':2,'Metal':12,'Glass':8}
+                category = "Wet" if w_type=="Organic" else "Dry"
+                earned = w_qty*points_map[w_type] if is_segregated=="Yes" else 0
 
                 # Assign collector
-                area_match = collectors[collectors['assigned_area'] == user['area']]
+                area_match = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area']==user['area']]
                 if not area_match.empty:
-                    selected_collector = area_match.sort_values('total_points').iloc[0]
-                    c_id, c_name = selected_collector['collector_id'], selected_collector['name']
-                    idx = collectors[collectors['collector_id'] == c_id].index[0]
-                    st.session_state['collectors_df'].at[idx, 'total_points'] += earned
-                else:
-                    c_id, c_name = None, "Unassigned"
+                    selected = area_match.sort_values('total_points').iloc[0]
+                    c_id, c_name = selected['collector_id'], selected['name']
+                    idx = st.session_state['collectors_df'][st.session_state['collectors_df']['collector_id']==c_id].index[0]
+                    st.session_state['collectors_df'].at[idx,'total_points'] += earned
+                else: c_id, c_name = None,"Unassigned"
 
-                # Update user info
-                users = st.session_state['users_df']
-                if user['mobile'] not in users['mobile'].values:
-                    new_u = {'user_id': generate_user_id(), 'name': user['name'], 'mobile': user['mobile'],
-                             'area': user['area'], 'total_points': earned,
-                             'improper_count': 0 if is_segregated=="Yes" else 1}
-                    st.session_state['users_df'] = pd.concat([users, pd.DataFrame([new_u])], ignore_index=True)
-                else:
-                    u_idx = users[users['mobile'] == user['mobile']].index[0]
-                    st.session_state['users_df'].at[u_idx, 'total_points'] += earned
-                    if is_segregated == "No":
-                        st.session_state['users_df'].at[u_idx, 'improper_count'] += 1
+                # Update user points immediately for daily points
+                u_idx = st.session_state['users_df'][st.session_state['users_df']['mobile']==user['mobile']].index[0]
+                st.session_state['users_df'].at[u_idx,'total_points'] += earned
+                if is_segregated=="No": st.session_state['users_df'].at[u_idx,'improper_count'] += 1
 
                 # Log submission
-                new_sub = {
-                    'submission_id': len(st.session_state['submissions_df'])+1,
-                    'user_id': user['mobile'], 'collector_id': c_id,
-                    'waste_type': w_type, 'quantity': w_qty, 'points': earned,
-                    'status': "Proper" if is_segregated=="Yes" else "Improper",
-                    'category': category, 'timestamp': datetime.now(), 'area': user['area']
-                }
+                new_sub = {'submission_id':len(st.session_state['submissions_df'])+1,
+                           'user_id':user['mobile'],'collector_id':c_id,'waste_type':w_type,
+                           'quantity':w_qty,'points':earned,'status':"Proper" if is_segregated=="Yes" else "Improper",
+                           'category':category,'timestamp':datetime.now(),'area':user['area']}
                 st.session_state['submissions_df'] = pd.concat([st.session_state['submissions_df'], pd.DataFrame([new_sub])], ignore_index=True)
-                
                 st.balloons()
-                st.success(f"Successfully submitted! Collector **{c_name}** notified. You earned **{earned}** points.")
+                st.success(f"Submitted! Collector **{c_name}** notified. Points earned: **{earned}**")
+                st.experimental_rerun()  # real-time refresh
 
 # -----------------------------
-# 5. PAGE: User Dashboard (Optimized 4 graphs)
+# ADMIN FLOW
 # -----------------------------
-elif page == "User Dashboard":
-    st.title("📊 Waste Analytics Dashboard")
-    df = st.session_state['submissions_df']
+elif role == "Admin":
+    st.title("🏛️ Municipal Admin Dashboard")
+    st.subheader("Login with admin credentials")
+    admin_user = st.text_input("Username")
+    admin_pass = st.text_input("Password", type="password")
+    if st.button("Admin Login"):
+        if admin_user=="admin" and admin_pass=="admin123":
+            st.success("Admin login successful!")
 
-    if df.empty:
-        st.info("No data available. Submit waste to see analytics!")
-    else:
-        df['date'] = pd.to_datetime(df['timestamp']).dt.date
+            # Automatically update daily points if not updated today
+            if st.session_state['last_points_update'] != date.today():
+                update_daily_points()
+                st.info(f"Daily points updated for {date.today()} ✅")
 
-        # Row 1: Donut & Bar
-        col1, col2 = st.columns(2)
+            df = st.session_state['submissions_df']
+            collectors = st.session_state['collectors_df']
+            users = st.session_state['users_df']
 
-        with col1:
-            st.subheader("♻️ Waste Composition by Type")
-            fig_donut = px.pie(df, names='waste_type', values='quantity', hole=0.5,
-                               color_discrete_sequence=px.colors.qualitative.Safe,
-                               title="Waste Composition")
-            st.plotly_chart(fig_donut, use_container_width=True)
+            # Collector Performance
+            st.subheader("Collector Performance")
+            st.table(collectors[['name','assigned_area','total_points']])
 
-        with col2:
-            st.subheader("📍 Area-wise Total Waste (kg)")
-            area_waste = df.groupby('area')['quantity'].sum().reset_index()
-            fig_area_bar = px.bar(area_waste, x='area', y='quantity',
-                                  labels={'quantity': 'Total Waste (kg)', 'area': 'Area'},
-                                  title='Total Waste Collected by Area',
-                                  color='quantity', color_continuous_scale='Viridis')
-            st.plotly_chart(fig_area_bar, use_container_width=True)
+            # Area-wise Waste
+            st.subheader("Area-wise Waste Collection")
+            if not df.empty:
+                area_waste = df.groupby('area')['quantity'].sum().reset_index()
+                fig = px.bar(area_waste,x='area',y='quantity',title="Waste Collected per Area", labels={'quantity':'Total Waste (kg)'})
+                st.plotly_chart(fig,use_container_width=True)
 
-        # Row 2: Segregation Pie & Line Chart
-        col3, col4 = st.columns(2)
+            # Segregation Pie
+            st.subheader("Segregation Status")
+            if not df.empty:
+                status_df = df['status'].value_counts().reset_index()
+                status_df.columns=['status','count']
+                fig2 = px.pie(status_df,names='status',values='count',color_discrete_map={'Proper':'#27ae60','Improper':'#c0392b'})
+                st.plotly_chart(fig2,use_container_width=True)
 
-        with col3:
-            st.subheader("✅ Segregation Status")
-            seg_status = df['status'].value_counts().reset_index()
-            seg_status.columns = ['status', 'count']
-            fig_seg = px.pie(seg_status, names='status', values='count',
-                             color_discrete_map={'Proper':'#27ae60', 'Improper':'#c0392b'},
-                             title='Proper vs Improper Segregation')
-            st.plotly_chart(fig_seg, use_container_width=True)
+            # Daily Trends Line Chart
+            st.subheader("Daily Collection Trends")
+            if not df.empty:
+                df['date'] = pd.to_datetime(df['timestamp']).dt.date
+                line_df = df.groupby(['date','area'])['quantity'].sum().reset_index()
+                fig3 = px.line(line_df,x='date',y='quantity',color='area',markers=True,
+                               labels={'quantity':'Total Waste (kg)','date':'Date','area':'Area'})
+                st.plotly_chart(fig3,use_container_width=True)
 
-        with col4:
-            st.subheader("📈 Daily Waste Collection Trends")
-            line_df = df.groupby(['date', 'area'])['quantity'].sum().reset_index()
-            fig_line = px.line(line_df, x='date', y='quantity', color='area', markers=True,
-                               labels={'quantity': 'Total Waste (kg)', 'date': 'Date', 'area': 'Area'},
-                               title="Daily Collection Trends by Area")
-            st.plotly_chart(fig_line, use_container_width=True)
-
-# -----------------------------
-# 6. PAGE: Leaderboard
-# -----------------------------
-elif page == "Leaderboard":
-    st.title("🏆 Community Leaderboard")
-    u_df = st.session_state['users_df']
-
-    if not u_df.empty:
-        top_users = u_df.sort_values(by='total_points', ascending=False).head(10)
-        st.table(top_users[['name', 'area', 'total_points']])
-    else:
-        st.write("The race hasn't started yet!")
+            # Leaderboard
+            st.subheader("Community Leaderboard")
+            if not users.empty:
+                top_users = users.sort_values('total_points',ascending=False).head(10)
+                st.table(top_users[['name','area','total_points']])
+        else:
+            st.error("Invalid admin credentials")
