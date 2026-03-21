@@ -194,35 +194,37 @@ else:
                 st.experimental_rerun()
 
     # -----------------------------
-    # Dashboard & Leaderboard (KPI Cards)
+    # Dashboard & Leaderboard (Donut + Bubble + Area KPI)
     # -----------------------------
     elif page=="Dashboard & Leaderboard":
         st.header("📊 Recycling Dashboard")
         df = st.session_state['submissions_df']
         users = st.session_state['users_df']
 
+        # 1️⃣ Donut: Waste Type %
         if not df.empty:
-            # 1️⃣ Waste Type KPIs
-            st.subheader("♻️ Waste Collected by Type (kg)")
             waste_df = df.groupby('waste_type')['quantity'].sum().reset_index()
-            cols = st.columns(len(waste_df))
-            for col, (_, row) in zip(cols, waste_df.iterrows()):
-                col.metric(label=row['waste_type'], value=f"{row['quantity']} kg")
+            fig_waste = go.Figure(data=[go.Pie(labels=waste_df['waste_type'], values=waste_df['quantity'],
+                                               hole=0.5, textinfo='label+percent')])
+            st.subheader("Waste Type Distribution (%)")
+            st.plotly_chart(fig_waste, use_container_width=True)
 
-            # 2️⃣ Total Waste by Area KPIs
-            st.subheader("🟢 Total Waste Collected by Area (kg)")
+        # 2️⃣ Total Waste by Area (KPI Cards)
+        if not df.empty:
+            st.subheader("🟢 Total Waste Collected by Area (kg) - KPI View")
             total_area_df = df.groupby('area')['quantity'].sum().reset_index()
             cols = st.columns(len(total_area_df))
             for col, (_, row) in zip(cols, total_area_df.iterrows()):
                 col.metric(label=row['area'], value=f"{row['quantity']} kg")
 
-            # 3️⃣ Segregation Status KPIs
-            st.subheader("⚡ Segregation Status Overview")
+        # 3️⃣ Segregation Status (Bubble Chart)
+        if not df.empty:
             status_df = df['status'].value_counts().reset_index()
             status_df.columns = ['status','count']
-            cols = st.columns(len(status_df))
-            for col, (_, row) in zip(cols, status_df.iterrows()):
-                col.metric(label=row['status'], value=row['count'])
+            fig_status = px.scatter(status_df, x='status', y='count', size='count', color='status',
+                                    size_max=100, title="Segregation Status Overview")
+            st.subheader("Segregation Status Bubble Chart")
+            st.plotly_chart(fig_status, use_container_width=True)
 
         # 4️⃣ Current User Points & Badge
         st.subheader("🏅 Your Points & Badge")
