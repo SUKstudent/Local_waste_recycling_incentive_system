@@ -46,7 +46,6 @@ def generate_otp(length=4):
     return ''.join(random.choices(string.digits, k=length))
 
 def get_progressive_badge(points):
-    # Badge milestones
     milestones = [5, 10, 20, 40, 80, 120, 160, 200]
     badges = ["♻️ Newbie Recycler", "🌱 Green Starter", "🌿 Eco Warrior", "🌳 Eco Hero",
               "🏆 Recycling Master", "🌟 Recycling Legend", "🏅 Recycling Champion", "⚡ Eco Titan"]
@@ -210,14 +209,26 @@ else:
             st.subheader("Waste Type Distribution (%)")
             st.plotly_chart(fig_waste, use_container_width=True)
 
-        # 2️⃣ Daily Waste by Area (Pie Chart)
+        # 2️⃣ Daily Waste by Area → Replaced with Line Chart
         if not df.empty:
-            today = date.today()
-            daily_area_df = df[pd.to_datetime(df['timestamp']).dt.date == today].groupby('area')['quantity'].sum().reset_index()
-            fig_daily_area = go.Figure(data=[go.Pie(labels=daily_area_df['area'], values=daily_area_df['quantity'],
-                                                   hole=0.4, textinfo='label+percent')])
-            st.subheader(f"Daily Waste Collection by Area ({today})")
-            st.plotly_chart(fig_daily_area, use_container_width=True)
+            df['date'] = pd.to_datetime(df['timestamp']).dt.date
+            daily_area_trend = df.groupby(['date','area'])['quantity'].sum().reset_index()
+            
+            fig_daily_area_line = px.line(
+                daily_area_trend,
+                x='date',
+                y='quantity',
+                color='area',
+                markers=True,
+                title="Daily Waste Collection by Area (Trend)"
+            )
+            fig_daily_area_line.update_layout(
+                xaxis_title="Date",
+                yaxis_title="Quantity (kg)"
+            )
+            
+            st.subheader("📈 Daily Waste Collection by Area (Trend)")
+            st.plotly_chart(fig_daily_area_line, use_container_width=True)
 
         # 3️⃣ Segregation Status (Bubble Chart)
         if not df.empty:
