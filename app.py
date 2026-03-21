@@ -21,9 +21,7 @@ st.set_page_config(
 st.sidebar.image("GreenBin.jpg", width=150)
 st.sidebar.markdown("""
 # ♻️ Recycle Rewards
-
 Encouraging recycling with points and rewards.
-
 Register or login to start contributing!
 """)
 
@@ -32,34 +30,11 @@ Register or login to start contributing!
 # -----------------------------
 st.markdown("""
 <style>
-[data-testid="stAppViewContainer"] {
-    background-color: #121212;
-    color: #ffffff;
-}
-input, textarea, select {
-    background-color: #333333 !important;
-    color: #ffffff !important;
-    border-radius: 5px !important;
-    border: 1px solid #555555 !important;
-    padding: 0.5em !important;
-}
-.stButton>button {
-    background-color: #2e7d32 !important;
-    color: white !important;
-    width: 100% !important;
-    height: 3em !important;
-    border-radius: 5px !important;
-    font-weight: bold !important;
-}
-.stAlert {
-    background-color: #2a2a2a !important;
-    color: #fff !important;
-}
-hr {
-    border-color: #2e7d32;
-    margin-top: 0.5rem;
-    margin-bottom: 1rem;
-}
+[data-testid="stAppViewContainer"] { background-color: #121212; color: #ffffff; }
+input, textarea, select { background-color: #333333 !important; color: #ffffff !important; border-radius: 5px !important; border: 1px solid #555555 !important; padding: 0.5em !important; }
+.stButton>button { background-color: #2e7d32 !important; color: white !important; width: 100% !important; height: 3em !important; border-radius: 5px !important; font-weight: bold !important; }
+.stAlert { background-color: #2a2a2a !important; color: #fff !important; }
+hr { border-color: #2e7d32; margin-top: 0.5rem; margin-bottom: 1rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -214,7 +189,7 @@ else:
             st.experimental_rerun()
 
     # -----------------------------
-    # Multi-tab Dashboard with Filters
+    # Multi-tab Dashboard with Power BI style charts
     # -----------------------------
     st.markdown("---")
     st.header("📊 Recycling Dashboard")
@@ -222,7 +197,7 @@ else:
     collectors = st.session_state['collectors_df']
     users = st.session_state['users_df']
 
-    # Filter sidebar for charts
+    # Filters
     st.sidebar.subheader("Filters")
     area_filter = st.sidebar.multiselect("Select Area", options=df['area'].unique() if not df.empty else [], default=None)
     start_date = st.sidebar.date_input("Start Date", min(df['timestamp']).date() if not df.empty else datetime.today())
@@ -255,11 +230,29 @@ else:
         st.subheader("Collector Performance")
         st.table(collectors[['name','assigned_area','total_points']].sort_values('total_points', ascending=False).reset_index(drop=True))
 
-    # 3️⃣ Area-wise Waste
+    # 3️⃣ Area-wise Waste (Power BI style)
     with tabs[2]:
         if not filtered_df.empty:
             area_waste = filtered_df.groupby('area')['quantity'].sum().reset_index()
-            fig_area = px.bar(area_waste, x='area', y='quantity', color='area', title="Waste Collected per Area", labels={'quantity':'Total Waste (kg)'})
+            
+            fig_area = px.bar(
+                area_waste,
+                x='area',
+                y='quantity',
+                text='quantity',
+                color='area',
+                color_discrete_sequence=px.colors.qualitative.Vivid,
+                title="Waste Collected per Area",
+                labels={'quantity':'Total Waste (kg)', 'area':'Area'}
+            )
+            fig_area.update_traces(texttemplate='%{text:.2f} kg', textposition='outside')
+            fig_area.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white', size=14),
+                yaxis=dict(title='Total Waste (kg)', gridcolor='rgba(255,255,255,0.1)'),
+                xaxis=dict(title='Area')
+            )
             st.plotly_chart(fig_area, use_container_width=True)
 
     # 4️⃣ Segregation Donut
@@ -268,16 +261,26 @@ else:
             status_df = filtered_df['status'].value_counts().reset_index()
             status_df.columns=['status','count']
             fig_status = go.Figure(data=[go.Pie(labels=status_df['status'], values=status_df['count'], hole=0.5)])
-            fig_status.update_traces(marker=dict(colors=['#27ae60','#c0392b']))
-            fig_status.update_layout(title="Segregation Status")
+            fig_status.update_traces(marker=dict(colors=['#27ae60','#c0392b']), textinfo='label+percent')
+            fig_status.update_layout(title="Segregation Status", font=dict(color='white', size=14), paper_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_status, use_container_width=True)
 
-    # 5️⃣ Daily Trends
+    # 5️⃣ Daily Trends (Power BI style)
     with tabs[4]:
         if not filtered_df.empty:
             filtered_df['date'] = pd.to_datetime(filtered_df['timestamp']).dt.date
             line_df = filtered_df.groupby(['date','area'])['quantity'].sum().reset_index()
-            fig_trends = px.line(line_df, x='date', y='quantity', color='area', markers=True, title="Daily Collection Trends", labels={'quantity':'Total Waste (kg)'})
+            fig_trends = px.line(
+                line_df, x='date', y='quantity', color='area', markers=True,
+                title="Daily Collection Trends", labels={'quantity':'Total Waste (kg)'}
+            )
+            fig_trends.update_traces(textposition='top right')
+            fig_trends.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white', size=14),
+                yaxis=dict(title='Total Waste (kg)', gridcolor='rgba(255,255,255,0.1)')
+            )
             st.plotly_chart(fig_trends, use_container_width=True)
 
     # 6️⃣ Leaderboard
