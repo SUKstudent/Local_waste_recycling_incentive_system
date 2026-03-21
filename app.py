@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import random
 import string
-from datetime import datetime
+from datetime import datetime, date
+import plotly.express as px
+import plotly.graph_objects as go
 
 # -----------------------------
 # Page Config
@@ -20,13 +22,13 @@ st.sidebar.image("GreenBin.jpg", width=150)
 st.sidebar.markdown("""
 # ♻️ Recycle Rewards
 
-This app encourages recycling by awarding points for waste submissions.
+Encouraging recycling with points and rewards.
 
 Register or login to start contributing!
 """)
 
 # -----------------------------
-# Dark Theme CSS for main content
+# Dark Theme CSS
 # -----------------------------
 st.markdown("""
 <style>
@@ -62,13 +64,13 @@ hr {
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# Project Title above user portal
+# Project Title
 # -----------------------------
 st.markdown("""
-    <h1 style="color:#2e7d32; margin-bottom: 0; font-weight: 900;">
-        ♻️ Local Waste Recycling Incentive System
-    </h1>
-    <hr>
+<h1 style="color:#2e7d32; margin-bottom: 0; font-weight: 900;">
+♻️ Local Waste Recycling Incentive System
+</h1>
+<hr>
 """, unsafe_allow_html=True)
 
 # -----------------------------
@@ -81,7 +83,7 @@ def generate_otp(length=4):
     return ''.join(random.choices(string.digits, k=length))
 
 # -----------------------------
-# Initialize session state
+# Session State Init
 # -----------------------------
 if 'users_df' not in st.session_state:
     st.session_state['users_df'] = pd.DataFrame(columns=['user_id','name','mobile','area','total_points','improper_count'])
@@ -103,7 +105,7 @@ st.session_state.setdefault('logged_in', False)
 st.session_state.setdefault('current_user', {})
 
 # -----------------------------
-# Logout button
+# Logout
 # -----------------------------
 if st.session_state['logged_in']:
     if st.sidebar.button("Logout"):
@@ -172,6 +174,10 @@ if not st.session_state['logged_in']:
 else:
     user = st.session_state['current_user']
     st.success(f"Logged in as: {user['name']} | Area: {user['area']}")
+
+    # -----------------------------
+    # Waste Submission Form
+    # -----------------------------
     assigned = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area'] == user['area']]
     if not assigned.empty:
         st.info(f"Your Collector Assigned: **{assigned.iloc[0]['name']}** 🚚 En route...")
@@ -185,6 +191,7 @@ else:
             category = "Wet" if w_type == "Organic" else "Dry"
             earned = w_qty * points_map[w_type]
 
+            # Assign collector
             area_match = st.session_state['collectors_df'][st.session_state['collectors_df']['assigned_area'] == user['area']]
             if not area_match.empty:
                 selected = area_match.sort_values('total_points').iloc[0]
@@ -194,9 +201,11 @@ else:
             else:
                 c_id, c_name = None, "Unassigned"
 
+            # Update user points
             u_idx = st.session_state['users_df'][st.session_state['users_df']['mobile'] == user['mobile']].index[0]
             st.session_state['users_df'].at[u_idx, 'total_points'] += earned
 
+            # Log submission
             new_sub = {'submission_id': len(st.session_state['submissions_df']) + 1,
                        'user_id': user['mobile'], 'collector_id': c_id, 'waste_type': w_type,
                        'quantity': w_qty, 'points': earned, 'status': "Proper",
@@ -206,3 +215,59 @@ else:
             st.balloons()
             st.success(f"Submitted! Collector **{c_name}** notified. Points earned: **{earned}**")
             st.experimental_rerun()
+
+    # -----------------------------
+    # Enhanced Dashboard
+    # -----------------------------
+    st.markdown("---")
+    st.header("📊 Recycling Dashboard")
+
+    df = st.session_state['submissions_df']
+    collectors = st.session_state['collectors_df']
+    users = st.session_state['users_df']
+
+    # Metrics
+    total_waste = df['quantity'].sum() if not df.empty else 0
+    total_points = df['points'].sum() if not df.empty else 0
+    total_submissions = len(df)
+    proper_count = df[df['status']=="Proper"].shape[0] if not df.empty else 0
+    improper_count = df[df['status']=="Improper"].shape[0] if not df.empty else 0
+    proper_pct = (proper_count/(proper_count+improper_count)*100) if (proper_count+improper_count)>0 else 0
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total Waste (kg)", f"{total_waste:.2f}")
+    col2.metric("Total Points", f"{total_points:.0f}")
+    col3.metric("Submissions", f"{total_submissions}")
+    col4.metric("Proper Segregation %", f"{proper_pct:.1f}%")
+
+    # Collector performance table
+    st.subheader("Collector Performance")
+    st.table(collectors[['name','assigned_area','total_points']].sort_values('total_points', ascending=False).reset_index(drop=True))
+
+    # Area-wise waste bar chart
+    if not df.empty:
+        area_waste = df.groupby('area')['quantity'].sum().reset_index()
+        fig_area = px.bar(area_waste, x='area', y='quantity', color='area', title="Waste Collected per Area", labels={'quantity':'Total Waste (kg)'})
+        st.plotly_chart(fig_area, use_container_width=True)
+
+    # Segregation status donut chart
+    if not df.empty:
+        status_df = df['status'].value_counts().reset_index()
+        status_df.columns = ['status','count']
+        fig_status = go.Figure(data=[go.Pie(labels=status_df['status'], values=status_df['count'], hole=0.5)])
+        fig_status.update_traces(marker=dict(colors=['#27ae60','#c0392b']))
+        fig_status.update_layout(title="Segregation Status")
+        st.plotly_chart(fig_status, use_container_width=True)
+
+    # Daily trends line chart
+    if not df.empty:
+        df['date'] = pd.to_datetime(df['timestamp']).dt.date
+        line_df = df.groupby(['date','area'])['quantity'].sum().reset_index()
+        fig_trends = px.line(line_df, x='date', y='quantity', color='area', markers=True, title="Daily Collection Trends", labels={'quantity':'Total Waste (kg)'})
+        st.plotly_chart(fig_trends, use_container_width=True)
+
+    # Community leaderboard
+    if not users.empty:
+        st.subheader("Community Leaderboard")
+        top_users = users.sort_values('total_points', ascending=False).head(10)
+        st.table(top_users[['name','area','total_points']].reset_index(drop=True))
