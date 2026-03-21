@@ -208,13 +208,16 @@ else:
             st.subheader("Waste Type Distribution (%)")
             st.plotly_chart(fig_waste,use_container_width=True)
 
-        # 2️⃣ Bar: Area-wise
+        # 2️⃣ Pie Chart: Area-wise Waste Collection
         if not df.empty:
             area_waste = df.groupby('area')['quantity'].sum().reset_index()
-            fig_area = px.bar(area_waste,x='area',y='quantity',text='quantity',color='area',title="Waste Collected per Area")
-            fig_area.update_traces(texttemplate='%{text:.2f} kg', textposition='outside')
+            fig_area = px.pie(area_waste, values='quantity', names='area',
+                              title="Waste Collected per Area",
+                              color='area',
+                              color_discrete_sequence=px.colors.qualitative.Set3)
+            fig_area.update_traces(textinfo='label+percent', hole=0.3)
             st.subheader("Area-wise Waste Collection")
-            st.plotly_chart(fig_area,use_container_width=True)
+            st.plotly_chart(fig_area, use_container_width=True)
 
         # 3️⃣ Line: Daily trends
         if not df.empty:
@@ -224,13 +227,14 @@ else:
             st.subheader("Daily Waste Collection Trend")
             st.plotly_chart(fig_line,use_container_width=True)
 
-        # 4️⃣ Horizontal Bar: Top Users
-        if not users.empty:
-            top_users = users.sort_values('total_points',ascending=False).head(10)
-            fig_hbar = px.bar(top_users,x='total_points',y='name',orientation='h',color='total_points',title="Top Recyclers Leaderboard")
-            st.subheader("Top Recyclers Leaderboard")
-            st.plotly_chart(fig_hbar,use_container_width=True)
-
-        # User Badge
-        st.subheader("🏅 Your Badge")
-        st.markdown(f"<h2 style='color:#2e7d32;'>{st.session_state.get('current_badge','🎉 Welcome Recycler')}</h2>",unsafe_allow_html=True)
+        # 4️⃣ Current User Points & Badge
+        st.subheader("🏅 Your Points & Badge")
+        u_idx = st.session_state['users_df'].loc[st.session_state['users_df']['mobile']==user['mobile']].index[0]
+        user_points = st.session_state['users_df'].at[u_idx,'total_points']
+        user_badge = st.session_state['users_df'].at[u_idx,'badge']
+        st.markdown(f"""
+**Name:** {user['name']}  
+**Area:** {user['area']}  
+**Total Points:** {user_points}  
+**Badge:** {user_badge}  
+""")
