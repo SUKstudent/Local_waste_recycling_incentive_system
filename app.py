@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Recycle Rewards", layout="wide", page_icon="♻️")
 
 # -----------------------------
-# Sidebar: Image + Font
+# Sidebar
 # -----------------------------
 st.sidebar.markdown("""
 <style>
@@ -206,30 +206,27 @@ else:
         if not df.empty:
             waste_df = df.groupby('waste_type')['quantity'].sum().reset_index()
             fig_waste = go.Figure(data=[go.Pie(labels=waste_df['waste_type'], values=waste_df['quantity'],
-                                               hole=0.5, textinfo='label+percent',
-                                               marker=dict(colors=['#f1c40f','#3498db','#2ecc71','#e74c3c','#9b59b6']))])
+                                               hole=0.5, textinfo='label+percent')])
             st.subheader("Waste Type Distribution (%)")
             st.plotly_chart(fig_waste, use_container_width=True)
 
-        # 2️⃣ Daily Waste by Area (Stacked Bar)
+        # 2️⃣ Daily Waste by Area (Pie Chart)
         if not df.empty:
-            df['date'] = pd.to_datetime(df['timestamp']).dt.date
-            daily_area_df = df.groupby(['date','area'])['quantity'].sum().reset_index()
-            fig_daily_area = px.bar(daily_area_df, x='date', y='quantity', color='area',
-                                    title="Daily Waste Collection by Area (kg)", text='quantity')
-            fig_daily_area.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-            st.subheader("Daily Waste Collection by Area")
+            today = date.today()
+            daily_area_df = df[pd.to_datetime(df['timestamp']).dt.date == today].groupby('area')['quantity'].sum().reset_index()
+            fig_daily_area = go.Figure(data=[go.Pie(labels=daily_area_df['area'], values=daily_area_df['quantity'],
+                                                   hole=0.4, textinfo='label+percent')])
+            st.subheader(f"Daily Waste Collection by Area ({today})")
             st.plotly_chart(fig_daily_area, use_container_width=True)
 
-        # 3️⃣ Segregation Status Donut
+        # 3️⃣ Segregation Status (Bubble Chart)
         if not df.empty:
             status_df = df['status'].value_counts().reset_index()
             status_df.columns = ['status','count']
-            fig_status = go.Figure(data=[go.Pie(labels=status_df['status'], values=status_df['count'], hole=0.5)])
-            fig_status.update_traces(marker=dict(colors=['#27ae60','#f39c12','#c0392b']),
-                                     textinfo='label+percent')
-            st.subheader("Segregation Status")
-            st.plotly_chart(fig_status,use_container_width=True)
+            fig_status = px.scatter(status_df, x='status', y='count', size='count', color='status',
+                                    size_max=100, title="Segregation Status Overview")
+            st.subheader("Segregation Status Bubble Chart")
+            st.plotly_chart(fig_status, use_container_width=True)
 
         # 4️⃣ Current User Points & Badge
         st.subheader("🏅 Your Points & Badge")
