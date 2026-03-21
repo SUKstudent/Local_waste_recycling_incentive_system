@@ -53,7 +53,22 @@ input, textarea, select {
     background-color: #2a2a2a !important;
     color: #fff !important;
 }
+hr {
+    border-color: #2e7d32;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
 </style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# Project Title above user portal
+# -----------------------------
+st.markdown("""
+    <h1 style="color:#2e7d32; margin-bottom: 0; font-weight: 900;">
+        ♻️ Local Waste Recycling Incentive System
+    </h1>
+    <hr>
 """, unsafe_allow_html=True)
 
 # -----------------------------
