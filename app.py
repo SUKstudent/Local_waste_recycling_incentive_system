@@ -46,9 +46,11 @@ def generate_otp(length=4):
     return ''.join(random.choices(string.digits, k=length))
 
 def get_progressive_badge(points):
-    milestones = [5, 10, 20, 40, 80]
-    badges = ["♻️ Newbie Recycler", "🌱 Green Starter", "🌿 Eco Warrior", "🌳 Eco Hero", "🏆 Recycling Master"]
-    last_badge = badges[0]
+    # Badge milestones
+    milestones = [5, 10, 20, 40, 80, 120, 160, 200]
+    badges = ["♻️ Newbie Recycler", "🌱 Green Starter", "🌿 Eco Warrior", "🌳 Eco Hero",
+              "🏆 Recycling Master", "🌟 Recycling Legend", "🏅 Recycling Champion", "⚡ Eco Titan"]
+    last_badge = "🎉 Welcome Recycler"
     for milestone, badge in zip(milestones, badges):
         if points >= milestone:
             last_badge = badge
@@ -174,6 +176,7 @@ else:
                             st.session_state['collectors_df'].at[idx,'total_points'] += points_awarded
                         u_idx = st.session_state['users_df'].loc[st.session_state['users_df']['mobile']==user['mobile']].index[0]
                         st.session_state['users_df'].at[u_idx,'total_points'] += points_awarded
+                        # Deduction
                         if status=="Improper": st.session_state['users_df'].at[u_idx,'total_points']=max(0,st.session_state['users_df'].at[u_idx,'total_points']-2)
                         if status=="Contaminated": st.session_state['users_df'].at[u_idx,'total_points']=max(0,st.session_state['users_df'].at[u_idx,'total_points']-3)
                         new_sub={'submission_id':len(st.session_state['submissions_df'])+1,'user_id':user['mobile'],
@@ -192,52 +195,33 @@ else:
                 st.experimental_rerun()
 
     # -----------------------------
-    # Dashboard & Charts
+    # Dashboard & Leaderboard (4 Charts)
     # -----------------------------
     elif page=="Dashboard & Leaderboard":
         st.header("📊 Recycling Dashboard")
         df = st.session_state['submissions_df']
         users = st.session_state['users_df']
-        collectors = st.session_state['collectors_df']
 
         # 1️⃣ Donut: Waste Type %
         if not df.empty:
             waste_df = df.groupby('waste_type')['quantity'].sum().reset_index()
-            fig_waste = go.Figure(data=[go.Pie(labels=waste_df['waste_type'],values=waste_df['quantity'],
-                                               hole=0.5,textinfo='label+percent',
+            fig_waste = go.Figure(data=[go.Pie(labels=waste_df['waste_type'], values=waste_df['quantity'],
+                                               hole=0.5, textinfo='label+percent',
                                                marker=dict(colors=['#f1c40f','#3498db','#2ecc71','#e74c3c','#9b59b6']))])
             st.subheader("Waste Type Distribution (%)")
-            st.plotly_chart(fig_waste,use_container_width=True)
+            st.plotly_chart(fig_waste, use_container_width=True)
 
-        # 2️⃣ Pie Chart: Area-wise Waste Collection
+        # 2️⃣ Daily Waste by Area (Stacked Bar)
         if not df.empty:
-            area_waste = df.groupby('area')['quantity'].sum().reset_index()
-            fig_area = px.pie(area_waste, values='quantity', names='area',
-                              title="Waste Collected per Area",
-                              color='area',
-                              color_discrete_sequence=px.colors.qualitative.Set3)
-            fig_area.update_traces(textinfo='label+percent', hole=0.3)
-            st.subheader("Area-wise Waste Collection")
-            st.plotly_chart(fig_area, use_container_width=True)
+            df['date'] = pd.to_datetime(df['timestamp']).dt.date
+            daily_area_df = df.groupby(['date','area'])['quantity'].sum().reset_index()
+            fig_daily_area = px.bar(daily_area_df, x='date', y='quantity', color='area',
+                                    title="Daily Waste Collection by Area (kg)", text='quantity')
+            fig_daily_area.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+            st.subheader("Daily Waste Collection by Area")
+            st.plotly_chart(fig_daily_area, use_container_width=True)
 
-        # 3️⃣ Line: Daily trends
-        if not df.empty:
-            df['date']=pd.to_datetime(df['timestamp']).dt.date
-            line_df = df.groupby('date')['quantity'].sum().reset_index()
-            fig_line = px.line(line_df,x='date',y='quantity',markers=True,title="Daily Waste Collection Trends")
-            st.subheader("Daily Waste Collection Trend")
-            st.plotly_chart(fig_line,use_container_width=True)
-
-        # 4️⃣ Collector Performance Bar Chart
-        if not collectors.empty:
-            fig_col = px.bar(collectors, x='name', y='total_points',
-                             color='assigned_area', title="Collector Performance (Total Points)",
-                             text='total_points')
-            fig_col.update_traces(texttemplate='%{text}', textposition='outside')
-            st.subheader("Collector Performance")
-            st.plotly_chart(fig_col, use_container_width=True)
-
-        # 5️⃣ Segregation Status Donut
+        # 3️⃣ Segregation Status Donut
         if not df.empty:
             status_df = df['status'].value_counts().reset_index()
             status_df.columns = ['status','count']
@@ -247,7 +231,7 @@ else:
             st.subheader("Segregation Status")
             st.plotly_chart(fig_status,use_container_width=True)
 
-        # 6️⃣ Current User Points & Badge
+        # 4️⃣ Current User Points & Badge
         st.subheader("🏅 Your Points & Badge")
         u_idx = users.loc[users['mobile']==user['mobile']].index[0]
         user_points = users.at[u_idx,'total_points']
