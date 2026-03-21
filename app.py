@@ -26,9 +26,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# Sidebar: Logo + Logout
+# Sidebar: Logo + Description + Logout
 # -----------------------------
-st.sidebar.image("GreenBin.jpg", width=150)
+st.sidebar.image("GreenBin.jpg", width=250)  # Increased width
+
+st.sidebar.markdown("""
+### ♻️ Recycle Rewards
+Encouraging recycling and proper segregation.
+Earn points for your contributions and climb the leaderboard!
+""")
 
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
@@ -79,11 +85,8 @@ if 'submissions_df' not in st.session_state:
     st.session_state['submissions_df'] = pd.DataFrame(columns=[
         'submission_id','user_id','collector_id','waste_type','quantity','points','status','category','timestamp','area'
     ])
-
-# -----------------------------
-# User Portal
-# -----------------------------
-st.subheader("User Portal")
+st.session_state.setdefault('otp_sent', False)
+st.session_state.setdefault('otp_value', '')
 
 # -----------------------------
 # Default Area-wise Wastes
@@ -96,6 +99,11 @@ area_waste_default = {
     "Market":["Plastic","Paper","Organic","Glass"],
     "Industrial Area":["Plastic","Paper","Organic","Metal","Glass"]
 }
+
+# -----------------------------
+# User Portal
+# -----------------------------
+st.subheader("User Portal")
 
 if not st.session_state['logged_in']:
     tab1, tab2 = st.tabs(["Login", "Register"])
